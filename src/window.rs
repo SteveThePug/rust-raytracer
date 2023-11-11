@@ -22,9 +22,11 @@ pub struct State {
     // unsafe references to the window's resources.
     window: winit::window::Window,
     // Handle to a rendering pipeline
-    render_pipeline1: wgpu::RenderPipeline,
+    render_pipeline: wgpu::RenderPipeline,
+    //Challenge 2: Alternate pipeline
     render_pipeline2: wgpu::RenderPipeline,
-    // Clear color
+    challange2: bool,
+    // Challenge 1: Clear Color
     clear_color: wgpu::Color,
 }
 
@@ -98,46 +100,7 @@ impl State {
                 push_constant_ranges: &[],
             });
         //Create final render pipeline
-        let render_pipeline1 = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main", // 1.
-                buffers: &[],           // 2.
-            },
-            fragment: Some(wgpu::FragmentState {
-                // 3.
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    // 4.
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw, // 2.
-                cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-                polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
-                unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
-                conservative: false,
-            },
-            depth_stencil: None, // 1.
-            multisample: wgpu::MultisampleState {
-                count: 1,                         // 2.
-                mask: !0,                         // 3.
-                alpha_to_coverage_enabled: false, // 4.
-            },
-            multiview: None, // 5.
-        });
-        let render_pipeline2 = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
@@ -177,6 +140,46 @@ impl State {
             multiview: None, // 5.
         });
 
+        let challange2 = false;
+        let render_pipeline2 = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main", // 1.
+                buffers: &[],           // 2.
+            },
+            fragment: Some(wgpu::FragmentState {
+                // 3.
+                module: &shader,
+                entry_point: "fs_alt",
+                targets: &[Some(wgpu::ColorTargetState {
+                    // 4.
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList, // 1.
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw, // 2.
+                cull_mode: Some(wgpu::Face::Back),
+                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
+                polygon_mode: wgpu::PolygonMode::Fill,
+                // Requires Features::DEPTH_CLIP_CONTROL
+                unclipped_depth: false,
+                // Requires Features::CONSERVATIVE_RASTERIZATION
+                conservative: false,
+            },
+            depth_stencil: None, // 1.
+            multisample: wgpu::MultisampleState {
+                count: 1,                         // 2.
+                mask: !0,                         // 3.
+                alpha_to_coverage_enabled: false, // 4.
+            },
+            multiview: None, // 5.
+        });
 
         let clear_color = wgpu::Color {
             r: 0.0,
@@ -193,6 +196,8 @@ impl State {
             config,
             size,
             render_pipeline,
+            render_pipeline2,
+            challange2,
             clear_color,
         }
     }
@@ -212,8 +217,7 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorLeft { .. } => {
-                ren
+            WindowEvent::MouseInput { .. } => {
                 self.clear_color = wgpu::Color {
                     r: 0.5, // Example values for when mouse is clicked
                     g: 0.5,
@@ -223,15 +227,12 @@ impl State {
                 true
             }
             WindowEvent::KeyboardInput { input, .. } => {
-                if let Some(virtual_keycode) = input.virtual_keycode {
-                    match virtual_keycode {
-                        VirtualKeyCode::Space => {
-
-                        }
-                        _ => true,
+                match input.virtual_keycode.expect("Not a keycode") {
+                    VirtualKeyCode::Space => {
+                        self.challange2 ^= true;
+                        true
                     }
-                } else {
-                    false
+                    _ => false,
                 }
             }
             _ => true,
@@ -267,7 +268,10 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            render_pass.set_pipeline(&self.render_pipeline); // 2.
+            match self.challange2 {
+                true => render_pass.set_pipeline(&self.render_pipeline),
+                false => render_pass.set_pipeline(&self.render_pipeline2),
+            };
             render_pass.draw(0..3, 0..1); // 3.
         }
 

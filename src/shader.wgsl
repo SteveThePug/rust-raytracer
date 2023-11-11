@@ -20,6 +20,7 @@ fn vs_main(@builtin(vertex_index) in_vertex_index: u32,) -> VertexOutput {
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     return in.color;
 }
+@fragment
 fn fs_alt(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>{0.3f, 0.7f, 0.7f};
+    return vec4<f32>(0.3, 0.7, 0.7, 1.0);
 }
