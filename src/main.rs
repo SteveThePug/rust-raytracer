@@ -1,7 +1,11 @@
 #![allow(dead_code)]
+#![allow(unused_imports)]
+//Use our ray module
 mod ray;
-use nalgebra::{Matrix4, Vector4};
 use ray::Ray;
+//Use linear algebra module
+use nalgebra::Vector4;
+//Use modules for wgpu
 use std::borrow::Cow;
 use winit::{
     event::{Event, WindowEvent},
@@ -9,8 +13,8 @@ use winit::{
     window::Window,
 };
 
+//MAIN ---------------------------------------------------------------------------------
 fn main() {
-    let x = Vector4::new(1.0, 1.0, 1.0, 1.0);
-    let mat_a = Matrix4::from_diagonal_element(0.12);
-    println!("mat_a*x = {}", { mat_a * x });
+    println!("Hello world");
 }
+//NEXT ---------------------------------------------------------------------------------
