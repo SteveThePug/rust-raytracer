@@ -5,6 +5,7 @@ use std::ops;
 // Vector: x,y,z,0
 // Position: x,y,z,1
 
+#[derive(Copy, Clone)]
 pub struct Vec4 {
     x: [f32; 4],
 }
@@ -30,6 +31,17 @@ impl Vec4 {
             + self.x[1] * other.x[1]
             + self.x[2] * other.x[2]
             + self.x[3] * other.x[3]
+    }
+    //Cross product
+    pub fn cross(&self, other: &Vec4) -> Vec4 {
+        Vec4 {
+            x: [
+                self.x[1] * other.x[2] - self.x[2] * other.x[1],
+                self.x[2] * other.x[0] - self.x[0] * other.x[2],
+                self.x[0] * other.x[1] - self.x[1] * other.x[0],
+                0.0,
+            ],
+        }
     }
     //Normalise the vector
     pub fn normalise(&mut self) {
