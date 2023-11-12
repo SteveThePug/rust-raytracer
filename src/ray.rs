@@ -1,15 +1,17 @@
-use nalgebra::Vector4;
+use crate::EPSILON;
+
+use nalgebra::{Matrix4, Point3, Vector3};
 
 pub struct Ray {
-    a: Vector4<f32>,
-    b: Vector4<f32>,
+    pub a: Point3<f32>,
+    pub b: Vector3<f32>,
 }
 
 impl Ray {
-    fn new(_a: Vector4<f32>, _b: Vector4<f32>) -> Ray {
+    pub fn new(_a: Point3<f32>, _b: Vector3<f32>) -> Ray {
         Ray { a: _a, b: _b }
     }
-    fn at_t(self, t: f32) -> Vector4<f32> {
+    pub fn at_t(self, t: f32) -> Point3<f32> {
         self.a + self.b * t
     }
 }
