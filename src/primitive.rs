@@ -3,6 +3,9 @@ use crate::{EPSILON, INFINITY};
 use lazy_static::lazy_static;
 use nalgebra::{distance, Matrix4, Point3, Vector3};
 use roots::{find_roots_quadratic, Roots};
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::Path;
 
 lazy_static! {
     static ref MAGENTA_MATERIAL: Material = Material::magenta();
@@ -29,11 +32,16 @@ impl Material {
 struct Intersection {
     point: Point3<f32>,
     normal: Vector3<f32>,
+    distance: f32,
     // Information about an intersection
 }
 impl Intersection {
-    fn new(point: Point3<f32>, normal: Vector3<f32>) -> Self {
-        Intersection { point, normal }
+    fn new(point: Point3<f32>, normal: Vector3<f32>, t: f32) -> Self {
+        Intersection {
+            point,
+            normal,
+            distance: t,
+        }
     }
 }
 // BOUNDING BOX -----------------------------------------------------------------
@@ -127,6 +135,7 @@ impl<'a> Primitive<'a> for Sphere<'a> {
         Some(Intersection {
             point: intersect,
             normal,
+            distance: t,
         })
     }
 
@@ -204,6 +213,7 @@ impl<'a> Primitive<'a> for Circle<'a> {
                 return Some(Intersection {
                     point: intersect,
                     normal: self.normal,
+                    distance: t,
                 })
             }
         }
@@ -323,6 +333,7 @@ impl<'a> Primitive<'a> for Cone<'a> {
                     true => Some(Intersection {
                         point: intersect,
                         normal: self.get_normal(intersect),
+                        distance: t,
                     }),
                     false => None,
                 }
@@ -407,6 +418,7 @@ impl<'a> Primitive<'a> for Rectangle<'a> {
         let constant = self.position.coords.dot(&self.normal);
         let denominator = ray.b.dot(&self.normal);
         let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+
         if t > INFINITY {
             return None;
         }
@@ -424,6 +436,7 @@ impl<'a> Primitive<'a> for Rectangle<'a> {
             return Some(Intersection {
                 point: intersect,
                 normal: self.normal,
+                distance: t,
             });
         }
         None
@@ -467,9 +480,8 @@ impl<'a> Box<'a> {
 impl<'a> Primitive<'a> for Box<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         // Compute the minimum and maximum t-values for each axis of the bounding box
-        let inv_dir = Vector3::new(1.0 / ray.b.x, 1.0 / ray.b.y, 1.0 / ray.b.z);
-        let t1 = (self.bounding_box.bln - ray.a).component_mul(&inv_dir);
-        let t2 = (self.bounding_box.trf - ray.a).component_mul(&inv_dir);
+        let t1 = (self.bounding_box.bln - ray.a).component_div(&ray.b);
+        let t2 = (self.bounding_box.trf - ray.a).component_div(&ray.b);
 
         // Find the largest minimum t-value and the smallest maximum t-value among the axes
         let tmin = t1.inf(&t2).max();
@@ -509,6 +521,7 @@ impl<'a> Primitive<'a> for Box<'a> {
             Some(Intersection {
                 point: intersect,
                 normal,
+                distance: tmin,
             })
         } else {
             None // No intersection with the box
@@ -526,40 +539,197 @@ impl<'a> Primitive<'a> for Box<'a> {
 
 // TRIANGLE -----------------------------------------------------------------
 struct Triangle<'a> {
+    u: Point3<f32>,
+    v: Point3<f32>,
+    w: Point3<f32>,
+    normal: Vector3<f32>,
     material: &'a Material,
+    bounding_box: BoundingBox,
 }
 
-impl Triangle<'_> {}
+impl<'a> Triangle<'a> {
+    fn new(u: Point3<f32>, v: Point3<f32>, w: Point3<f32>, material: &'a Material) -> Self {
+        let uv = v - u;
+        let uw = w - u;
+        let normal = uv.cross(&uw).normalize();
+        let bln = u.inf(&v).inf(&w);
+        let trf = u.sup(&v).sup(&w);
+        let bounding_box = BoundingBox { bln, trf };
+        Triangle {
+            u,
+            v,
+            w,
+            normal,
+            material,
+            bounding_box,
+        }
+    }
+    fn unit() -> Self {
+        let u = Point3::new(-1.0, 0.0, -1.0);
+        let v = Point3::new(0.0, 0.0, 1.0);
+        let w = Point3::new(1.0, 0.0, -1.0);
+        let material = &MAGENTA_MATERIAL;
+        Triangle::new(u, v, w, material)
+    }
+}
 
 impl<'a> Primitive<'a> for Triangle<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        todo!()
+        let constant = self.u.coords.dot(&self.normal);
+        let denominator = ray.b.dot(&self.normal);
+        let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+
+        if t > INFINITY {
+            return None;
+        }
+
+        let intersect = ray.at_t(t);
+
+        let uv = self.v - self.u;
+        let vw = self.w - self.v;
+        let wu = self.u - self.w;
+
+        let ui = intersect - self.u;
+        let vi = intersect - self.v;
+        let wi = intersect - self.w;
+
+        let u_cross = uv.cross(&ui);
+        let v_cross = vw.cross(&vi);
+        let w_cross = wu.cross(&wi);
+
+        let normal = self.normal;
+
+        if u_cross.dot(&normal) >= 0.0 && v_cross.dot(&normal) >= 0.0 && w_cross.dot(&normal) >= 0.0
+        {
+            Some(Intersection {
+                point: intersect,
+                normal,
+                distance: t,
+            })
+        } else {
+            None
+        }
     }
 
     fn get_material(self) -> &'a Material {
-        todo!()
+        self.material
     }
 
     fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
-        todo!()
+        self.bounding_box.intersect_bounding_box(ray)
     }
 }
 
 // MESH -----------------------------------------------------------------
 struct Mesh<'a> {
+    triangles: Vec<Triangle<'a>>,
     material: &'a Material,
+    bounding_box: BoundingBox,
 }
-impl Mesh<'_> {}
+
+impl<'a> Mesh<'a> {
+    fn new(triangles: Vec<Triangle<'a>>, material: &'a Material) -> Self {
+        // Calculate the bounding box for the entire mesh based on the bounding boxes of individual triangles
+        let bounding_box = Mesh::compute_bounding_box(&triangles);
+
+        Mesh {
+            triangles,
+            material,
+            bounding_box,
+        }
+    }
+
+    fn compute_bounding_box(triangles: &Vec<Triangle<'a>>) -> BoundingBox {
+        let mut bln = Point3::new(INFINITY, INFINITY, INFINITY);
+        let mut trf = -bln;
+        for triangle in triangles {
+            bln = bln.inf(&triangle.u);
+            bln = bln.inf(&triangle.v);
+            bln = bln.inf(&triangle.w);
+
+            trf = trf.sup(&triangle.u);
+            trf = trf.sup(&triangle.v);
+            trf = trf.sup(&triangle.w);
+        }
+        BoundingBox { bln, trf }
+    }
+
+    fn from_file(filename: &str, material: &'a Material) -> Self {
+        let mut triangles: Vec<Triangle> = Vec::new();
+        let mut vertices: Vec<Point3<f32>> = Vec::new();
+
+        let file = File::open(filename).expect("Failed to open file");
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                let mut parts = line.split_whitespace();
+                if let Some(keyword) = parts.next() {
+                    match keyword {
+                        "v" => {
+                            // Parse vertex coordinates
+                            if let (Some(x_str), Some(y_str), Some(z_str)) =
+                                (parts.next(), parts.next(), parts.next())
+                            {
+                                let x: f32 = x_str.parse().expect("Failed to parse vertex X");
+                                let y: f32 = y_str.parse().expect("Failed to parse vertex Y");
+                                let z: f32 = z_str.parse().expect("Failed to parse vertex Z");
+                                vertices.push(Point3::new(x, y, z));
+                            }
+                        }
+                        "f" => {
+                            // Parse face indices
+                            if let (Some(v1_str), Some(v2_str), Some(v3_str)) =
+                                (parts.next(), parts.next(), parts.next())
+                            {
+                                let v1: usize =
+                                    v1_str.parse().expect("Failed to parse vertex index");
+                                let v2: usize =
+                                    v2_str.parse().expect("Failed to parse vertex index");
+                                let v3: usize =
+                                    v3_str.parse().expect("Failed to parse vertex index");
+                                // Indices in OBJ files are 1-based, so subtract 1 to convert to 0-based.
+                                let a = vertices[v1 - 1];
+                                let b = vertices[v2 - 1];
+                                let c = vertices[v3 - 1];
+                                triangles.push(Triangle::new(a, b, c, material));
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+        todo!();
+    }
+}
+
 impl<'a> Primitive<'a> for Mesh<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        todo!()
+        let mut closest_distance = INFINITY;
+        let mut closest_intersect: Option<Intersection> = None;
+
+        for triangle in &self.triangles {
+            match triangle.intersect_ray(ray) {
+                Some(intersect) => {
+                    let distance = intersect.distance;
+                    if distance < closest_distance {
+                        closest_distance = distance;
+                        closest_intersect = Some(intersect);
+                    };
+                }
+                None => continue,
+            }
+        }
+
+        return closest_intersect;
     }
 
     fn get_material(self) -> &'a Material {
-        todo!()
+        self.material
     }
 
     fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
-        todo!()
+        self.bounding_box.intersect_bounding_box(ray)
     }
 }
