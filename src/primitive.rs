@@ -1,7 +1,13 @@
 use crate::ray::Ray;
-use crate::EPSILON;
+use crate::{EPSILON, INFINITY};
+use lazy_static::lazy_static;
 use nalgebra::{distance, Matrix4, Point3, Vector3};
 use roots::{find_roots_quadratic, Roots};
+
+lazy_static! {
+    static ref MAGENTA_MATERIAL: Material = Material::magenta();
+}
+
 // MATERIAL -----------------------------------------------------------------
 struct Material {
     kd: Vector3<f32>,
@@ -54,21 +60,21 @@ impl BoundingBox {
     }
 }
 // PRIMITIVE TRAIT -----------------------------------------------------------------
-trait Primitive {
+trait Primitive<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection>;
-    fn get_material(self) -> Material;
+    fn get_material(self) -> &'a Material;
 }
 
 // SPHERE -----------------------------------------------------------------
-struct Sphere {
+struct Sphere<'a> {
     position: Point3<f32>,
     radius: f32,
-    material: Material,
+    material: &'a Material,
     bounding_box: BoundingBox,
 }
 
-impl Sphere {
-    fn new(position: Point3<f32>, radius: f32, material: Material) -> Self {
+impl<'a> Sphere<'a> {
+    fn new(position: Point3<f32>, radius: f32, material: &'a Material) -> Self {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
@@ -82,23 +88,11 @@ impl Sphere {
     }
 
     fn unit() -> Self {
-        let position = Point3::new(0.0, 0.0, 0.0);
-        let radius = 1.0;
-        let radius_vec = Vector3::new(radius, radius, radius);
-        let material = Material::magenta();
-        let bln = position - radius_vec;
-        let trf = position + radius_vec;
-        let bounding_box = BoundingBox { bln, trf };
-        Sphere {
-            position,
-            radius,
-            material,
-            bounding_box,
-        }
+        Sphere::new(Point3::new(0.0, 0.0, 0.0), 1.0, &MAGENTA_MATERIAL)
     }
 }
 
-impl Primitive for Sphere {
+impl<'a> Primitive<'a> for Sphere<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         let pos = &ray.a;
         let dir = &ray.b;
@@ -134,23 +128,27 @@ impl Primitive for Sphere {
         })
     }
 
-    fn get_material(self) -> Material {
+    fn get_material(self) -> &'a Material {
         self.material
     }
 }
 
 // CIRCLE -----------------------------------------------------------------
-struct Circle {
+struct Circle<'a> {
     position: Point3<f32>,
     radius: f32,
     normal: Vector3<f32>,
-    material: Material,
+    material: &'a Material,
     bounding_box: BoundingBox,
 }
 
-impl Circle {
-    fn new(position: Point3<f32>, radius: f32, normal: Vector3<f32>, material: Material) -> Self {
-        let normal = normal.normalize();
+impl<'a> Circle<'a> {
+    fn new(
+        position: Point3<f32>,
+        radius: f32,
+        normal: Vector3<f32>,
+        material: &'a Material,
+    ) -> Self {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
@@ -158,7 +156,7 @@ impl Circle {
         Circle {
             position,
             radius,
-            normal,
+            normal: normal.normalize(),
             material,
             bounding_box,
         }
@@ -168,7 +166,7 @@ impl Circle {
         let position = Point3::new(0.0, 0.0, 0.0);
         let normal = Vector3::new(0.0, 1.0, 0.0);
         let radius = 1.0;
-        let material = Material::magenta();
+        let material = &MAGENTA_MATERIAL;
 
         let bln = Point3::new(-radius, 0.0, -EPSILON);
         let trf = Point3::new(radius, 0.0, EPSILON);
@@ -184,11 +182,14 @@ impl Circle {
     }
 }
 
-impl Primitive for Circle {
+impl<'a> Primitive<'a> for Circle<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         let constant = self.position.coords.dot(&self.normal);
         let denominator = ray.b.dot(&self.normal);
         let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+        if t > INFINITY {
+            return None;
+        };
         let intersect = ray.at_t(t);
         let distance = distance(&intersect, &self.position);
         match distance > self.radius {
@@ -202,35 +203,62 @@ impl Primitive for Circle {
         }
     }
 
-    fn get_material(self) -> Material {
+    fn get_material(self) -> &'a Material {
         self.material
     }
 }
 
 // CYLINDER -----------------------------------------------------------------
-struct Cylinder {}
+struct Cylinder<'a> {
+    radius: f32,
+    base: f32,
+    height: f32,
+    base_circle: &'a Circle<'a>,
+    height_circle: &'a Circle<'a>,
+    material: &'a Material,
+}
 
-impl Cylinder {}
+impl<'a> Cylinder<'a> {}
 
-impl Primitive for Cylinder {
+impl<'a> Primitive<'a> for Cylinder<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         todo!()
     }
 
-    fn get_material(self) -> Material {
+    fn get_material(self) -> &'a Material {
         todo!()
     }
 }
 
 // CONE -----------------------------------------------------------------
-struct Cone {
+struct Cone<'a> {
     radius: f32,
-    height: f32,
     base: f32,
-    circle: Circle,
+    height: f32,
+    circle: &'a Circle<'a>,
+    material: &'a Material,
 }
 
-impl Cone {
+impl<'a> Cone<'a> {
+    fn new(radius: f32, height: f32, base: f32, material: &'a Material) -> Self {
+        let circle = Arc::new(Circle::new(
+            Point3::new(0.0, -base, 0.0),
+            radius,
+            Vector3::new(0.0, 1.0, 0.0),
+            &material,
+        ));
+        Cone {
+            radius,
+            base,
+            height,
+            circle: Arc::clone(&circle),
+            material,
+        }
+    }
+    fn unit() -> Self {
+        Cone::new(1.0, 2.0, -1.0, &MAGENTA_MATERIAL)
+    }
+
     fn get_normal(&self, intersect: Point3<f32>) -> Vector3<f32> {
         let r = self.radius;
         let h = self.height;
@@ -240,7 +268,7 @@ impl Cone {
     }
 }
 
-impl Primitive for Cone {
+impl<'a> Primitive<'a> for Cone<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         let point = &ray.a;
         let dir = &ray.b;
@@ -300,46 +328,127 @@ impl Primitive for Cone {
         };
     }
 
-    fn get_material(self) -> Material {
-        todo!()
+    fn get_material(self) -> &'a Material {
+        self.material
+    }
+}
+
+// RECTANGLE -----------------------------------------------------------------
+struct Rectangle<'a> {
+    position: Point3<f32>,
+    normal: Vector3<f32>,
+    width_direction: Vector3<f32>,
+    material: &'a Material,
+    width: f32,
+    height: f32,
+}
+
+impl Rectangle<'_> {
+    fn new(
+        position: Point3<f32>,
+        normal: Vector3<f32>,
+        width_direction: Vector3<f32>,
+        width: f32,
+        height: f32,
+        material: &Material,
+    ) -> Self {
+        Rectangle {
+            position,
+            normal: normal.normalize(),
+            width_direction: width_direction.normalize(),
+            width,
+            height,
+            material,
+        }
+    }
+    fn unit() -> Self {
+        Rectangle::new(
+            Point3::new(0.0, 0.0, 0.0),
+            Vector3::new(0.0, 1.0, 0.0),
+            Vector3::new(1.0, 0.0, 0.0),
+            2.0,
+            2.0,
+            &Material::magenta(),
+        )
+    }
+}
+
+impl<'a> Primitive<'a> for Rectangle<'a> {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let constant = self.position.coords.dot(&self.normal);
+        let denominator = ray.b.dot(&self.normal);
+        let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+        if t > INFINITY {
+            return None;
+        }
+
+        let intersect = ray.at_t(t);
+        let height_direction = self.width_direction.cross(&self.normal);
+        let (w2, h2) = (self.width / 2.0, self.height / 2.0);
+        let r1 = w2 * self.width_direction;
+        let r2 = h2 * height_direction;
+        let pi = intersect - self.position;
+        let pi_dot_r1 = pi.dot(&r1);
+        let pi_dot_r2 = pi.dot(&r2);
+
+        if pi_dot_r1 >= -w2 && pi_dot_r1 <= w2 && pi_dot_r2 >= -h2 && pi_dot_r2 <= h2 {
+            return Some(Intersection {
+                point: intersect,
+                normal: self.normal,
+            });
+        }
+        None
+    }
+
+    fn get_material(self) -> &'a Material {
+        self.material
     }
 }
 
 // BOX -----------------------------------------------------------------
-struct Box {}
-impl Box {}
-impl Primitive for Box {
+struct Box<'a> {
+    material: &'a Material,
+}
+
+impl Box<'_> {}
+impl<'a> Primitive<'a> for Box<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         todo!()
     }
 
-    fn get_material(self) -> Material {
+    fn get_material(self) -> &'a Material {
         todo!()
     }
 }
 
 // TRIANGLE -----------------------------------------------------------------
-struct Triangle {}
-impl Triangle {}
-impl Primitive for Triangle {
+struct Triangle<'a> {
+    material: &'a Material,
+}
+
+impl Triangle<'_> {}
+
+impl<'a> Primitive<'a> for Triangle<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         todo!()
     }
 
-    fn get_material(self) -> Material {
+    fn get_material(self) -> &'a Material {
         todo!()
     }
 }
 
 // MESH -----------------------------------------------------------------
-struct Mesh {}
-impl Mesh {}
-impl Primitive for Mesh {
+struct Mesh<'a> {
+    material: &'a Material,
+}
+impl Mesh<'_> {}
+impl<'a> Primitive<'a> for Mesh<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         todo!()
     }
 
-    fn get_material(self) -> Material {
+    fn get_material(self) -> &'a Material {
         todo!()
     }
 }

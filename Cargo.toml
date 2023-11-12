@@ -20,3 +20,5 @@ bytemuck = { version = "1.12", features = [ "derive" ] }
 anyhow = "1.0"
 nalgebra = "0.32.3"
 roots = "0.0.8"
+lazy_static = "1.4.0"
+arc = "0.0.1"
