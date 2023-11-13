@@ -5,8 +5,8 @@ use nalgebra::Vector3;
 
 pub struct Scene<'a> {
     pub primitives: Vec<Box<dyn Primitive<'a>>>,
-    lights: Vec<Light>,
-    camera: Camera,
+    pub lights: Vec<Light>,
+    pub cameras: Vec<Camera>,
     pub ambient_light: Vector3<f32>,
 }
 

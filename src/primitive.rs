@@ -1,11 +1,12 @@
 use crate::ray::Ray;
 use crate::{EPSILON, INFINITY};
-use lazy_static::lazy_static;
 use nalgebra::{distance, Matrix4, Point3, Vector3};
 use roots::{find_roots_quadratic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
+
+use lazy_static::lazy_static;
 
 lazy_static! {
     static ref MAGENTA_MATERIAL: Material = Material::magenta();
