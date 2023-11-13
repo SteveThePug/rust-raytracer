@@ -8,8 +8,9 @@ pub struct Ray {
 }
 
 impl Ray {
-    pub fn new(_a: Point3<f32>, _b: Vector3<f32>) -> Ray {
-        Ray { a: _a, b: _b }
+    pub fn new(a: Point3<f32>, b: Vector3<f32>) -> Ray {
+        let b = b.normalize();
+        Ray { a, b }
     }
     pub fn at_t(&self, t: f32) -> Point3<f32> {
         self.a + self.b * t

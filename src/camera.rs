@@ -1,4 +1,5 @@
-use crate::EPSILON;
+use crate::ray::Ray;
+use crate::{EPSILON, INFINITY};
 use nalgebra as nm;
 use nalgebra::Matrix4;
 use nalgebra::Point3;
@@ -12,7 +13,7 @@ pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::new(
     0.0, 0.0, 0.0, 1.0,
 );
 
-struct Camera {
+pub struct Camera {
     eye: Point3<f32>,
     target: Point3<f32>,
     up: Vector3<f32>,
@@ -23,7 +24,7 @@ struct Camera {
 }
 
 impl Camera {
-    fn new(
+    pub fn new(
         eye: Point3<f32>,
         target: Point3<f32>,
         up: Vector3<f32>,
@@ -31,7 +32,7 @@ impl Camera {
         aspect: f32,
     ) -> Self {
         let znear = EPSILON;
-        let zfar = 1.0 / EPSILON;
+        let zfar = INFINITY;
         Camera {
             eye,
             target,
@@ -43,9 +44,34 @@ impl Camera {
         }
     }
 
-    fn build_mvp_matrix(&self, model: Matrix4<f32>) -> Matrix4<f32> {
+    pub fn build_view_projection_matrix(&self) -> Matrix4<f32> {
         let view = Matrix4::look_at_lh(&self.eye, &self.target, &self.up);
         let proj = Matrix4::new_perspective(self.aspect, self.fovy, self.znear, self.zfar);
-        return OPENGL_TO_WGPU_MATRIX * proj * view * model;
+        proj * view
+    }
+    pub fn build_inverse_view_projection_matrix(&self) -> Matrix4<f32> {
+        let view_proj = self.build_view_projection_matrix();
+        view_proj.try_inverse().expect("Cannot invert!")
+    }
+    pub fn cast_rays(&self, width: usize, height: usize) -> Vec<Ray> {
+        let inverse_matrix = self.build_inverse_view_projection_matrix();
+        let dx = 2.0 / width as f32;
+        let dy = 2.0 / height as f32;
+
+        let mut rays = Vec::with_capacity(width as usize * height as usize);
+
+        for i in 0..width {
+            for j in 0..height {
+                let x = -1.0 + i as f32 * dx;
+                let y = 1.0 - j as f32 * dy;
+
+                let a = inverse_matrix.transform_point(&Point3::new(x, y, -1.0));
+                let b = inverse_matrix.transform_vector(&Vector3::new(0.0, 0.0, 1.0));
+
+                let ray = Ray { a, b };
+                rays.push(ray);
+            }
+        }
+        rays
     }
 }

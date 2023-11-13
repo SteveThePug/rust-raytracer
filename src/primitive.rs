@@ -12,16 +12,16 @@ lazy_static! {
 }
 
 // MATERIAL -----------------------------------------------------------------
-struct Material {
+pub struct Material {
     kd: Vector3<f32>,
     ks: Vector3<f32>,
     shininess: f32,
 }
 impl Material {
-    fn new(kd: Vector3<f32>, ks: Vector3<f32>, shininess: f32) -> Self {
+    pub fn new(kd: Vector3<f32>, ks: Vector3<f32>, shininess: f32) -> Self {
         Material { kd, ks, shininess }
     }
-    fn magenta() -> Self {
+    pub fn magenta() -> Self {
         let kd = Vector3::new(1.0, 0.0, 1.0);
         let ks = Vector3::new(0.0, 1.0, 1.0);
         let shininess = 0.5;
@@ -29,14 +29,14 @@ impl Material {
     }
 }
 // INTERSECTION -----------------------------------------------------------------
-struct Intersection {
+pub struct Intersection {
     point: Point3<f32>,
     normal: Vector3<f32>,
     distance: f32,
     // Information about an intersection
 }
 impl Intersection {
-    fn new(point: Point3<f32>, normal: Vector3<f32>, t: f32) -> Self {
+    pub fn new(point: Point3<f32>, normal: Vector3<f32>, t: f32) -> Self {
         Intersection {
             point,
             normal,
@@ -69,7 +69,7 @@ impl BoundingBox {
     }
 }
 // PRIMITIVE TRAIT -----------------------------------------------------------------
-trait Primitive<'a> {
+pub trait Primitive<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection>;
     fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>>;
     fn get_material(self) -> &'a Material;
@@ -722,7 +722,7 @@ impl<'a> Primitive<'a> for Mesh<'a> {
             }
         }
 
-        return closest_intersect;
+        closest_intersect
     }
 
     fn get_material(self) -> &'a Material {
