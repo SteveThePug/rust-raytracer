@@ -13,9 +13,9 @@ lazy_static! {
 
 // MATERIAL -----------------------------------------------------------------
 pub struct Material {
-    kd: Vector3<f32>,
-    ks: Vector3<f32>,
-    shininess: f32,
+    pub kd: Vector3<f32>,
+    pub ks: Vector3<f32>,
+    pub shininess: f32,
 }
 impl Material {
     pub fn new(kd: Vector3<f32>, ks: Vector3<f32>, shininess: f32) -> Self {
@@ -29,17 +29,27 @@ impl Material {
     }
 }
 // INTERSECTION -----------------------------------------------------------------
-pub struct Intersection {
-    point: Point3<f32>,
-    normal: Vector3<f32>,
-    distance: f32,
+pub struct Intersection<'a> {
     // Information about an intersection
+    pub primitive: &'a dyn Primitive<'a>,
+    pub point: Point3<f32>,
+    pub normal: Vector3<f32>,
+    pub incidence: Vector3<f32>,
+    pub distance: f32,
 }
-impl Intersection {
-    pub fn new(point: Point3<f32>, normal: Vector3<f32>, t: f32) -> Self {
+impl<'a> Intersection<'a> {
+    pub fn new(
+        primitive: &'a dyn Primitive<'a>,
+        point: Point3<f32>,
+        normal: Vector3<f32>,
+        incidence: Vector3<f32>,
+        t: f32,
+    ) -> Self {
         Intersection {
+            primitive,
             point,
             normal,
+            incidence,
             distance: t,
         }
     }
@@ -71,8 +81,8 @@ impl BoundingBox {
 // PRIMITIVE TRAIT -----------------------------------------------------------------
 pub trait Primitive<'a> {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection>;
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>>;
-    fn get_material(self) -> &'a Material;
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>>;
+    fn get_material(&self) -> &'a Material;
 }
 
 // SPHERE -----------------------------------------------------------------
@@ -133,17 +143,19 @@ impl<'a> Primitive<'a> for Sphere<'a> {
         let intersect = ray.at_t(t);
         let normal = (intersect - self.position).normalize();
         Some(Intersection {
+            primitive: self,
             point: intersect,
             normal,
+            incidence: ray.b,
             distance: t,
         })
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         self.material
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         return self.bounding_box.intersect_bounding_box(ray);
     }
 }
@@ -211,19 +223,21 @@ impl<'a> Primitive<'a> for Circle<'a> {
             true => return None,
             false => {
                 return Some(Intersection {
+                    primitive: self,
                     point: intersect,
                     normal: self.normal,
+                    incidence: ray.b,
                     distance: t,
                 })
             }
         }
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         self.material
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -245,11 +259,11 @@ impl<'a> Primitive<'a> for Cylinder<'a> {
         todo!()
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         todo!()
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         todo!()
     }
 }
@@ -331,8 +345,10 @@ impl<'a> Primitive<'a> for Cone<'a> {
                 let intersect = ray.at_t(t);
                 match intersect.y >= self.base && intersect.y <= self.height {
                     true => Some(Intersection {
+                        primitive: self,
                         point: intersect,
                         normal: self.get_normal(intersect),
+                        incidence: ray.b,
                         distance: t,
                     }),
                     false => None,
@@ -357,11 +373,11 @@ impl<'a> Primitive<'a> for Cone<'a> {
         }
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         self.material
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -434,19 +450,21 @@ impl<'a> Primitive<'a> for Rectangle<'a> {
 
         if pi_dot_r1 >= -w2 && pi_dot_r1 <= w2 && pi_dot_r2 >= -h2 && pi_dot_r2 <= h2 {
             return Some(Intersection {
+                primitive: self,
                 point: intersect,
                 normal: self.normal,
+                incidence: ray.b,
                 distance: t,
             });
         }
         None
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         self.material
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -519,8 +537,10 @@ impl<'a> Primitive<'a> for Box<'a> {
             };
 
             Some(Intersection {
+                primitive: self,
                 point: intersect,
                 normal,
+                incidence: ray.b,
                 distance: tmin,
             })
         } else {
@@ -528,11 +548,11 @@ impl<'a> Primitive<'a> for Box<'a> {
         }
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         self.material
     }
 }
@@ -602,8 +622,10 @@ impl<'a> Primitive<'a> for Triangle<'a> {
         if u_cross.dot(&normal) >= 0.0 && v_cross.dot(&normal) >= 0.0 && w_cross.dot(&normal) >= 0.0
         {
             Some(Intersection {
+                primitive: self,
                 point: intersect,
                 normal,
+                incidence: ray.b,
                 distance: t,
             })
         } else {
@@ -611,11 +633,11 @@ impl<'a> Primitive<'a> for Triangle<'a> {
         }
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         self.material
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -725,11 +747,11 @@ impl<'a> Primitive<'a> for Mesh<'a> {
         closest_intersect
     }
 
-    fn get_material(self) -> &'a Material {
+    fn get_material(&self) -> &'a Material {
         self.material
     }
 
-    fn interesct_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }

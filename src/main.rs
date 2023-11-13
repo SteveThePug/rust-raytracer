@@ -10,6 +10,7 @@ mod display;
 mod light;
 mod primitive;
 mod ray;
+mod raytracer;
 mod scene;
 // mod state;
 // mod texture;
