@@ -4,25 +4,18 @@ version = "0.1.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies.image]
-version = "0.24"
-default-features = false
-features = ["png", "jpeg"]
-
-[dependencies.winit]
-version = "0.27"
-features = ["x11"]
-
 [dependencies]
 cfg-if = "1"
 env_logger = "0.10"
 log = "0.4"
-wgpu = "0.18"
 pollster = "0.3"
-bytemuck = { version = "1.12", features = [ "derive" ] }
 anyhow = "1.0"
 nalgebra = "0.32.3"
 roots = "0.0.8"
-lazy_static = "1.4.0"
-arc = "0.0.1"
-pixels = "0.13.0"
+pyo3 = "0.20.0"
+imgui = "0.11"
+imgui-wgpu = "0.24"
+imgui-winit-support = "0.11"
+winit_input_helper = "0.13"
+winit = "0.29.3"
+wgpu = "0.18.0"

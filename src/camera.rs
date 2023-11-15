@@ -53,8 +53,9 @@ impl Camera {
         let view_proj = self.build_view_projection_matrix();
         view_proj.try_inverse().expect("Cannot invert!")
     }
-    pub fn cast_rays(&self, width: usize, height: usize) -> Vec<Ray> {
+    pub fn cast_rays(&self, width: u32, height: u32) -> Vec<Ray> {
         let inverse_matrix = self.build_inverse_view_projection_matrix();
+
         let dx = 2.0 / width as f32;
         let dy = 2.0 / height as f32;
 
