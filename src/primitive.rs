@@ -82,7 +82,7 @@ pub trait Primitive {
 }
 
 // SPHERE -----------------------------------------------------------------
-struct Sphere {
+pub struct Sphere {
     position: Point3<f32>,
     radius: f32,
     bounding_box: BoundingBox,
@@ -103,7 +103,7 @@ impl Sphere {
         }
     }
 
-    fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Self {
         Sphere::new(Point3::new(0.0, 0.0, 0.0), 1.0, material)
     }
 }
@@ -185,7 +185,7 @@ impl Circle {
         }
     }
 
-    fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Self {
         let position = Point3::new(0.0, 0.0, 0.0);
         let normal = Vector3::new(0.0, 1.0, 0.0);
         let radius = 1.0;
@@ -413,7 +413,7 @@ impl Rectangle {
             bounding_box: BoundingBox { bln, trf },
         }
     }
-    fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Self {
         Rectangle::new(
             Point3::new(0.0, 0.0, 0.0),
             Vector3::new(0.0, 1.0, 0.0),
@@ -466,7 +466,7 @@ impl Primitive for Rectangle {
 }
 
 // BOX -----------------------------------------------------------------
-struct Box {
+pub struct Box {
     width: f32,
     height: f32,
     depth: f32,
@@ -486,7 +486,7 @@ impl Box {
             bounding_box: BoundingBox { bln, trf },
         }
     }
-    fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Self {
         Box::new(2.0, 2.0, 2.0, material)
     }
 }
@@ -580,7 +580,7 @@ impl Triangle {
             bounding_box,
         }
     }
-    fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Self {
         let u = Point3::new(-1.0, 0.0, -1.0);
         let v = Point3::new(0.0, 0.0, 1.0);
         let w = Point3::new(1.0, 0.0, -1.0);

@@ -8,57 +8,59 @@ use crate::{
 use std::sync::Arc;
 
 use nalgebra::{distance, Matrix4, Point3, Vector3, Vector4};
+static ZERO_VECTOR: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
+static ONE_VECTOR: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0);
 
-pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: u32, height: u32) -> Vec<Vector3<u8>> {
-    let mut pixel_data = vec![];
+pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: i32, height: i32) -> Vec<Vector3<u8>> {
+    let mut pixel_data = vec![Vector3::new(0, 0, 0); (width * height) as usize];
 
-    for ray in rays {
-        let intersect = get_closest_intersection(scene, ray);
-        match intersect {
-            Some(interect) => {
-                let colour = phong_shade_point(scene, &interect);
-                pixel_data.push(colour);
-            }
+    for (pixel_index, ray) in rays.iter().enumerate() {
+        let intersect = get_closest_intersection(scene.primitives.clone(), ray);
+        let colour = match intersect {
+            Some(intersect) => phong_shade_point(scene, &intersect),
             None => {
-                let colour = Vector3::new(0, 0, 0);
-                pixel_data.push(colour);
+                // Handle rays that miss objects (e.g., use a background color or environment map)
+                Vector3::new(0, 0, 0)
             }
-        }
+        };
+        pixel_data[pixel_index] = colour;
     }
-
     pixel_data
+}
+//Shade a single ray
+pub fn shade_ray(scene: &Scene, ray: &Ray) -> Vector3<u8> {
+    let intersect = get_closest_intersection(scene.primitives.clone(), ray);
+    match intersect {
+        Some(intersect) => phong_shade_point(&scene, &intersect),
+        None => Vector3::new(0, 0, 0),
+    }
 }
 
 // Find the closest intersection, given a ray in world coordinates
-pub fn get_closest_intersection(scene: &Scene, ray: &Ray) -> Option<Intersection> {
+pub fn get_closest_intersection(
+    primitives: Vec<Arc<dyn Primitive>>,
+    ray: &Ray,
+) -> Option<Intersection> {
     let mut closest_distance = INFINITY;
     let mut closest_intersect: Option<Intersection> = None;
-    for arc_primitive in &scene.primitives {
+
+    for arc_primitive in primitives {
         let primitive = arc_primitive.clone();
 
-        if primitive.intersect_ray(ray).is_none() {
-            continue;
-        };
-
-        let intersect = primitive.intersect_ray(ray);
-        if intersect.is_none() {
-            continue;
-        };
-
-        let intersect = intersect.unwrap();
-        if intersect.distance < closest_distance {
-            closest_distance = intersect.distance;
-            closest_intersect = Some(intersect);
+        if let Some(intersect) = primitive.intersect_ray(ray) {
+            if intersect.distance < closest_distance {
+                closest_distance = intersect.distance;
+                closest_intersect = Some(intersect);
+            }
         }
     }
+
     closest_intersect
 }
 
 // We want to shade a point placed in our scene
 pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8> {
     //Useful vectors !!!! CHECK IF WE CAN OPTIMISE
-    let zero_vector = Vector3::new(0.0, 0.0, 0.0);
-    let one_vector = Vector3::new(1.0, 1.0, 1.0);
     //Unpack the intersection data
     let Intersection {
         point,
@@ -102,7 +104,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         let diffuse = if n_dot_l > 0.0 {
             kd * n_dot_l
         } else {
-            zero_vector
+            ZERO_VECTOR
         };
 
         // Compute specular
@@ -111,7 +113,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         let specular = if n_dot_h > 0.0 {
             ks * n_dot_h.powf(shininess)
         } else {
-            zero_vector
+            ZERO_VECTOR
         };
 
         colour += light_colour.component_mul(&((diffuse + specular) * falloff));

@@ -9,6 +9,8 @@ pub(crate) struct Gui {
     last_frame: Instant,
     last_cursor: Option<imgui::MouseCursor>,
     about_open: bool,
+
+    pub num_rays: i32,
 }
 
 impl Gui {
@@ -58,6 +60,7 @@ impl Gui {
             last_frame: Instant::now(),
             last_cursor: None,
             about_open: true,
+            num_rays: 8,
         }
     }
 
@@ -93,17 +96,11 @@ impl Gui {
         // Draw windows and GUI elements here
         let mut about_open = false;
         ui.main_menu_bar(|| {
-            ui.menu("Help", || {
+            ui.menu("Options", || {
                 about_open = ui.menu_item("About...");
             });
         });
-        if about_open {
-            self.about_open = true;
-        }
-
-        if self.about_open {
-            ui.show_about_window(&mut self.about_open);
-        }
+        ui.slider("Num rays", 1, 100, &mut self.num_rays);
 
         // Render Dear ImGui with WGPU
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
