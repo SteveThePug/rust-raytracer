@@ -5,18 +5,22 @@
 
 //Cameras
 
+use crate::camera::Camera;
 use crate::gui::Gui;
+use crate::light::Light;
+use crate::primitive::*;
+use crate::scene::Scene;
+
 use error_iter::ErrorIter as _;
 use log::error;
+use nalgebra::{Point3, Vector3};
 use pixels::{Error, Pixels, SurfaceTexture};
+use std::sync::Arc;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
-
-use crate::camera::Camera;
-use crate::scene::Scene;
 
 mod camera;
 mod gui;
@@ -155,6 +159,53 @@ impl State {
         for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
             let x = (i % self.width as usize) as i16;
             let y = (i / self.width as usize) as i16;
+
+            //Create our scene
+            let eye = Point3::new(0.0, 0.0, -1.0);
+            let target = Point3::new(0.0, 0.0, 0.0);
+            let up = Vector3::new(0.0, 1.0, 0.0);
+            let arc_camera = Arc::new(Camera::new(
+                eye,
+                target,
+                up,
+                90.0,
+                (self.width / self.height) as f32,
+            ));
+            let cameras: Vec<Arc<Camera>> = vec![arc_camera.clone()];
+
+            let arc_material = Arc::new(Material::magenta());
+            let arc_cone = Arc::new(Cone::unit(arc_material));
+            let primitives: Vec<Arc<dyn Primitive>> = vec![arc_cone]
+                .into_iter()
+                .map(|arc| arc as Arc<dyn Primitive>)
+                .collect();
+
+            let light: Arc<Light>;
+            let light = Arc::new(Light::white());
+            let lights = vec![light];
+
+            let ambient_light = Arc::new(Vector3::new(1.0, 1.0, 1.0));
+
+            let scene = Scene::new(primitives, lights, cameras, ambient_light);
+
+            let rays = arc_camera.as_ref().cast_rays(self.width, self.height);
+
+            let colours = raytracer::shade_rays(&scene, &rays, self.width, self.height);
+            println!("{}", colours.len());
+            //
+            //     let pixels = pixels.frame().chunks_exact_mut(4);
+            //     for (i, colour) in colours.iter().enumerate() {
+            //         let colour = colours[i];
+            //         let pixel = &mut pixels[i];
+            //         pixel[0] = colour.x;
+            //         pixel[1] = colour.y;
+            //         pixel[2] = colour.z;
+            //     }
+            //
+            //     // Render the frame
+            //     if pixels.render().is_err() {
+            //         eprintln!("Failed to render frame");
+            //     }
 
             let rgba = [0x48, 0xb2, 0xe8, 0xff];
 

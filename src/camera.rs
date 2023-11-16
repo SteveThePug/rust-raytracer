@@ -21,6 +21,8 @@ pub struct Camera {
     aspect: f32,
     znear: f32,
     zfar: f32,
+    matrix: Matrix4<f32>,
+    inverse: Matrix4<f32>,
 }
 
 impl Camera {
@@ -33,6 +35,8 @@ impl Camera {
     ) -> Self {
         let znear = EPSILON;
         let zfar = INFINITY;
+        let matrix = self.build_view_projection_matrix(eye, target, up, aspect, fovy, znear, zfar);
+        let inverse = self.build_inverse_view_projection_matrix(eye, target, up, aspect, fovy, znear, zfar);
         Camera {
             eye,
             target,
@@ -44,13 +48,13 @@ impl Camera {
         }
     }
 
-    pub fn build_view_projection_matrix(&self) -> Matrix4<f32> {
-        let view = Matrix4::look_at_lh(&self.eye, &self.target, &self.up);
-        let proj = Matrix4::new_perspective(self.aspect, self.fovy, self.znear, self.zfar);
+    pub fn build_view_projection_matrix(eye: Point3<f32>, target: Point3<f32>, up: Vector3<f32>, aspect: f32, fovy: f32, znear: f32, zfar: f32) -> Matrix4<f32> {
+        let view = Matrix4::look_at_lh(eye, target, up);
+        let proj = Matrix4::new_perspective(aspect, fovy,znear, zfar);
         proj * view
     }
-    pub fn build_inverse_view_projection_matrix(&self) -> Matrix4<f32> {
-        let view_proj = self.build_view_projection_matrix();
+    pub fn build_inverse_view_projection_matrix(eye: Point3<f32>, target: Point3<f32>, up: Vector3<f32>, aspect: f32, fovy: f32, znear: f32, zfar: f32) -> Matrix4<f32> {
+        let view_proj = self.build_view_projection_matrix(eye, target, up, aspect, fovy, znear, zfar);
         view_proj.try_inverse().expect("Cannot invert!")
     }
     pub fn cast_rays(&self, width: u32, height: u32) -> Vec<Ray> {
@@ -74,5 +78,9 @@ impl Camera {
             }
         }
         rays
+    }
+    pub fn cast_ray(&self, width: u32, height: u32, x: u32, y: u32) -> Ray {
+        let dx = 2.0 / width as f32;
+        let dy = 2.0 / height as f32;
     }
 }
