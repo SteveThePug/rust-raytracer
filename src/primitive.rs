@@ -1,6 +1,6 @@
 use crate::ray::Ray;
-use crate::{EPSILON, INFINITY};
-use nalgebra::{distance, Matrix4, Point3, Vector3};
+use crate::{EPSILON, EPSILON_VECTOR, INFINITY};
+use nalgebra::{distance, Matrix4, Point3, Unit, Vector3};
 use roots::{find_roots_quadratic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -19,7 +19,31 @@ impl Material {
     }
     pub fn magenta() -> Self {
         let kd = Vector3::new(1.0, 0.0, 1.0);
-        let ks = Vector3::new(0.0, 1.0, 1.0);
+        let ks = Vector3::new(1.0, 0.0, 1.0);
+        let shininess = 0.5;
+        Material { kd, ks, shininess }
+    }
+    pub fn turquoise() -> Self {
+        let kd = Vector3::new(0.25, 1.0, 0.7);
+        let ks = Vector3::new(0.25, 1.0, 0.7);
+        let shininess = 0.5;
+        Material { kd, ks, shininess }
+    }
+    pub fn red() -> Self {
+        let kd = Vector3::new(1.0, 0.0, 0.0);
+        let ks = Vector3::new(1.0, 0.0, 0.0);
+        let shininess = 0.5;
+        Material { kd, ks, shininess }
+    }
+    pub fn blue() -> Self {
+        let kd = Vector3::new(0.0, 0.0, 1.0);
+        let ks = Vector3::new(0.0, 0.0, 1.0);
+        let shininess = 0.5;
+        Material { kd, ks, shininess }
+    }
+    pub fn green() -> Self {
+        let kd = Vector3::new(0.0, 1.0, 0.0);
+        let ks = Vector3::new(0.0, 1.0, 0.0);
         let shininess = 0.5;
         Material { kd, ks, shininess }
     }
@@ -28,16 +52,16 @@ impl Material {
 pub struct Intersection {
     // Information about an intersection
     pub point: Point3<f32>,
-    pub normal: Vector3<f32>,
-    pub incidence: Vector3<f32>,
+    pub normal: Unit<Vector3<f32>>,
+    pub incidence: Unit<Vector3<f32>>,
     pub material: Arc<Material>,
     pub distance: f32,
 }
 impl Intersection {
     pub fn new(
         point: Point3<f32>,
-        normal: Vector3<f32>,
-        incidence: Vector3<f32>,
+        normal: Unit<Vector3<f32>>,
+        incidence: Unit<Vector3<f32>>,
         material: Arc<Material>,
         t: f32,
     ) -> Self {
@@ -58,6 +82,8 @@ struct BoundingBox {
 
 impl BoundingBox {
     fn new(bln: Point3<f32>, trf: Point3<f32>) -> Self {
+        let bln = bln - EPSILON_VECTOR;
+        let trf = trf + EPSILON_VECTOR;
         BoundingBox { bln, trf }
     }
     fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
@@ -72,6 +98,9 @@ impl BoundingBox {
         } else {
             None
         }
+    }
+    fn get_centroid(&self) -> Point3<f32> {
+        self.bln + (self.trf - self.bln) / 2.0
     }
 }
 // PRIMITIVE TRAIT -----------------------------------------------------------------
@@ -137,7 +166,7 @@ impl Primitive for Sphere {
         };
 
         let intersect = ray.at_t(t);
-        let normal = (intersect - self.position).normalize();
+        let normal = Unit::new_normalize(intersect - self.position);
         Some(Intersection {
             point: intersect,
             normal,
@@ -220,7 +249,7 @@ impl Primitive for Circle {
             false => {
                 return Some(Intersection {
                     point: intersect,
-                    normal: self.normal,
+                    normal: Unit::new_normalize(self.normal),
                     incidence: ray.b,
                     material: Arc::clone(&self.material),
                     distance: t,
@@ -342,7 +371,7 @@ impl Primitive for Cone {
                 match intersect.y >= self.base && intersect.y <= self.height {
                     true => Some(Intersection {
                         point: intersect,
-                        normal: self.get_normal(intersect),
+                        normal: Unit::new_normalize(self.get_normal(intersect)),
                         material: Arc::clone(&self.material),
                         incidence: ray.b,
                         distance: t,
@@ -447,7 +476,7 @@ impl Primitive for Rectangle {
         if pi_dot_r1 >= -w2 && pi_dot_r1 <= w2 && pi_dot_r2 >= -h2 && pi_dot_r2 <= h2 {
             return Some(Intersection {
                 point: intersect,
-                normal: self.normal,
+                normal: Unit::new_normalize(self.normal),
                 incidence: ray.b,
                 material: Arc::clone(&self.material),
                 distance: t,
@@ -534,7 +563,7 @@ impl Primitive for Box {
 
             Some(Intersection {
                 point: intersect,
-                normal,
+                normal: Unit::new_normalize(normal),
                 incidence: ray.b,
                 material: Arc::clone(&self.material),
                 distance: tmin,
@@ -619,7 +648,7 @@ impl Primitive for Triangle {
         {
             Some(Intersection {
                 point: intersect,
-                normal,
+                normal: Unit::new_normalize(normal),
                 incidence: ray.b,
                 material: Arc::clone(&self.material),
                 distance: t,
