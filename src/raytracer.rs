@@ -7,7 +7,8 @@ use crate::{
 };
 use std::sync::Arc;
 
-use nalgebra::{distance, Matrix4, Point3, Vector3, Vector4};
+use nalgebra::{distance, Matrix4, Point3, Unit, Vector3, Vector4};
+
 static ZERO_VECTOR: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
 static ONE_VECTOR: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0);
 
@@ -28,11 +29,11 @@ pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: i32, height: i32) -> Ve
     pixel_data
 }
 //Shade a single ray
-pub fn shade_ray(scene: &Scene, ray: &Ray) -> Vector3<u8> {
+pub fn shade_ray(scene: &Scene, ray: &Ray) -> Option<Vector3<u8>> {
     let intersect = get_closest_intersection(scene.primitives.clone(), ray);
     match intersect {
-        Some(intersect) => phong_shade_point(&scene, &intersect),
-        None => Vector3::new(0, 0, 0),
+        Some(intersect) => Some(phong_shade_point(&scene, &intersect)),
+        None => None,
     }
 }
 
@@ -91,7 +92,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         // Get light incidence vector
         let to_light = light_position - point;
         let light_distance = to_light.norm();
-        let light_incidence = to_light.normalize();
+        let light_incidence = Unit::new_normalize(to_light);
 
         // Compute light falloff
         let falloff = 1.0
@@ -108,7 +109,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         };
 
         // Compute specular
-        let h = (light_incidence + incidence).normalize();
+        let h = (&light_incidence.into_inner() + incidence.into_inner()).normalize();
         let n_dot_h = normal.dot(&h);
         let specular = if n_dot_h > 0.0 {
             ks * n_dot_h.powf(shininess)
