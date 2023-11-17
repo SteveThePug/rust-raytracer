@@ -104,7 +104,7 @@ impl BoundingBox {
     }
 }
 // PRIMITIVE TRAIT -----------------------------------------------------------------
-pub trait Primitive {
+pub trait Primitive: Send + Sync {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection>;
     fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>>;
     fn get_material(&self) -> Arc<Material>;
@@ -495,7 +495,7 @@ impl Primitive for Rectangle {
 }
 
 // BOX -----------------------------------------------------------------
-pub struct Box {
+pub struct Cube {
     width: f32,
     height: f32,
     depth: f32,
@@ -503,11 +503,11 @@ pub struct Box {
     bounding_box: BoundingBox,
 }
 
-impl Box {
+impl Cube {
     fn new(width: f32, height: f32, depth: f32, material: Arc<Material>) -> Self {
         let trf = Point3::new(width / 2.0, height / 2.0, depth / 2.0);
         let bln = Point3::new(-width / 2.0, -height / 2.0, -depth / 2.0);
-        Box {
+        Cube {
             width,
             height,
             depth,
@@ -516,11 +516,11 @@ impl Box {
         }
     }
     pub fn unit(material: Arc<Material>) -> Self {
-        Box::new(2.0, 2.0, 2.0, material)
+        Cube::new(2.0, 2.0, 2.0, material)
     }
 }
 
-impl Primitive for Box {
+impl Primitive for Cube {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         // Compute the minimum and maximum t-values for each axis of the bounding box
         let t1 = (self.bounding_box.bln - ray.a).component_div(&ray.b);

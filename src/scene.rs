@@ -5,35 +5,25 @@ use nalgebra::Vector3;
 use std::sync::Arc;
 
 pub struct Scene {
-    pub primitives: Vec<Arc<dyn Primitive>>,
-    pub lights: Vec<Arc<Light>>,
-    pub cameras: Vec<Arc<Camera>>,
+    pub primitives: Arc<Vec<Box<dyn Primitive>>>,
+    pub lights: Arc<Vec<Light>>,
+    pub cameras: Arc<Vec<Camera>>,
     pub ambient_light: Arc<Vector3<f32>>,
 }
 
 impl Scene {
-    // Creates a new Scene with given parameters
+    // Creates a scene
     pub fn new(
-        primitives: Vec<Arc<dyn Primitive>>,
-        lights: Vec<Arc<Light>>,
-        cameras: Vec<Arc<Camera>>,
-        ambient_light: Arc<Vector3<f32>>,
+        primitives: Vec<Box<dyn Primitive>>,
+        lights: Vec<Light>,
+        cameras: Vec<Camera>,
+        ambient_light: Vector3<f32>,
     ) -> Self {
         Scene {
-            primitives,
-            lights,
-            cameras,
-            ambient_light,
-        }
-    }
-
-    // Creates an empty Scene with default values
-    pub fn empty() -> Self {
-        Scene {
-            primitives: Vec::new(),
-            lights: Vec::new(),
-            cameras: Vec::new(),
-            ambient_light: Arc::new(Vector3::new(0.0, 0.0, 0.0)),
+            primitives: Arc::new(primitives),
+            lights: Arc::new(lights),
+            cameras: Arc::new(cameras),
+            ambient_light: Arc::new(ambient_light),
         }
     }
 }
