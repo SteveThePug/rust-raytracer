@@ -14,8 +14,8 @@ use pixels::{Error, Pixels, SurfaceTexture};
 use std::env;
 use std::rc::Rc;
 use std::sync::Arc;
-use winit::dpi::LogicalSize;
-use winit::event::{Event, VirtualKeyCode};
+use winit::dpi::{LogicalSize, PhysicalSize};
+use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
@@ -47,11 +47,19 @@ struct State {
     width: i32,
     height: i32,
     gui: Gui,
+    pixels: Pixels,
 }
 
 impl State {
     /// Create a new `World` instance that can draw a moving box.
-    fn new(width: i32, height: i32, scene: Scene, camera: Camera, gui: Gui) -> Self {
+    fn new(
+        width: i32,
+        height: i32,
+        scene: Scene,
+        camera: Camera,
+        pixels: Pixels,
+        gui: Gui,
+    ) -> Self {
         let rays = camera.cast_rays(width, height);
         Self {
             width,
@@ -60,6 +68,7 @@ impl State {
             rays,
             scene,
             camera,
+            pixels,
             gui,
         }
     }
@@ -73,15 +82,32 @@ impl State {
     }
 
     /// Resize the world
-    fn resize(&mut self, width: i32, height: i32) {
-        self.width = width;
-        self.height = height;
+    fn resize(&mut self, size: &PhysicalSize<u32>) -> bool {
+        if let Err(err) = self.pixels.resize_surface(size.width, size.height) {
+            log_error("pixels.resize_surface", err);
+            return false;
+        }
+        self.width = size.width as i32;
+        self.height = size.height as i32;
+        true
     }
+
+    fn keyboard_input(&mut self, key: &KeyboardInput) {
+        match key.virtual_keycode {
+            Some(key) => match key {
+                VirtualKeyCode::A => {}
+                _ => {}
+            },
+            None => {}
+        }
+    }
+    fn mouse_input(&mut self, button: &MouseButton) {}
 
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
-    fn draw(&mut self, frame: &mut [u8]) {
+    fn draw(&mut self) {
+        let frame = self.pixels.frame_mut();
         for i in 0..self.gui.num_rays {
             let ray = &self.rays[self.index];
             let colour = raytracer::shade_ray(&self.scene, &ray);
@@ -93,25 +119,12 @@ impl State {
             self.index = self.index + 1;
         }
     }
-
-    fn draw_all(&mut self, frame: &mut [u8]) {
-        let rays = self.camera.cast_rays(self.width, self.height);
-        let colours = raytracer::shade_rays(&self.scene, &rays, self.width, self.height);
-        for (i, colour) in colours.iter().enumerate() {
-            let colour = colours[i];
-            // pixel[0] = colour.x;
-            // pixel[1] = colour.y;
-            // pixel[2] = colour.z;
-            // pixel[3] = 255;
-        }
-    }
 }
 
 fn main() -> Result<(), Error> {
     env_logger::init();
     //Window
     let event_loop = EventLoop::new();
-    let mut input = WinitInputHelper::new();
     let window = {
         let size = LogicalSize::new(START_WIDTH as f64, START_HEIGHT as f64);
         WindowBuilder::new()
@@ -122,7 +135,7 @@ fn main() -> Result<(), Error> {
             .unwrap()
     };
     //Pixel surface
-    let mut pixels = {
+    let pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
         Pixels::new(START_WIDTH as u32, START_HEIGHT as u32, surface_texture)?
@@ -162,59 +175,49 @@ fn main() -> Result<(), Error> {
     // Set up Dear ImGui
     let gui = Gui::new(&window, &pixels);
     let scene = Scene::new(primitives, lights, cameras, ambient_light);
-    let mut state = State::new(START_WIDTH, START_HEIGHT, scene, camera, gui);
+    let pixels = {
+        let window_size = window.inner_size();
+        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
+        Pixels::new(START_WIDTH as u32, START_HEIGHT as u32, surface_texture)?
+    };
+    let mut state = State::new(START_WIDTH, START_HEIGHT, scene, camera, pixels, gui);
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
-        if let Event::RedrawRequested(_) = event {
-            state.draw(pixels.frame_mut());
-            // Draw the world
-            // Prepare Dear ImGui
-            state.gui.prepare(&window).expect("gui.prepare() failed");
-            // Render everything together
-            let render_result = pixels.render_with(|encoder, render_target, context| {
-                // Render the world texture
-                context.scaling_renderer.render(encoder, render_target);
-                // Render Dear ImGui
-                state.gui.render(&window, encoder, render_target, context)?;
-                // *control_flow = ControlFlow::Exit;
-                Ok(())
-            });
-            // Basic error handling
-            if let Err(err) = render_result {
-                log_error("pixels.render", err);
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-        }
-
-        // Handle input events
-        state.gui.handle_event(&window, &event);
-        if input.update(&event) {
-            // Close events
-            if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-            if input.key_pressed(VirtualKeyCode::A) {}
-            // Resize the window
-            if let Some(size) = input.window_resized() {
-                if size.width > 0 && size.height > 0 {
-                    // Resize the surface texture
-                    if let Err(err) = pixels.resize_surface(size.width, size.height) {
-                        log_error("pixels.resize_surface", err);
-                        *control_flow = ControlFlow::Exit;
-                        return;
-                    }
-
-                    state.resize(size.width as i32, size.height as i32);
+        state.gui.handle_event(&window, &event); //Let gui handle its events
+        match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => {
+                    *control_flow = ControlFlow::Exit;
+                }
+                WindowEvent::Resized(size) => {
+                    state.resize(&size);
+                }
+                WindowEvent::KeyboardInput { input, .. } => {
+                    state.keyboard_input(&input);
+                }
+                WindowEvent::MouseInput { button, .. } => {
+                    state.mouse_input(&button);
+                }
+                _ => {}
+            },
+            Event::RedrawRequested(_) => {
+                state.draw(); //Draw to pixels
+                state.gui.prepare(&window).expect("gui.prepare() failed"); //Prepare imgui
+                let render_result = state.pixels.render_with(|encoder, render_target, context| {
+                    context.scaling_renderer.render(encoder, render_target); // Render pixels
+                    state.gui.render(&window, encoder, render_target, context)?;
+                    Ok(())
+                });
+                if let Err(err) = render_result {
+                    log_error("pixels.render", err);
+                    *control_flow = ControlFlow::Exit;
                 }
             }
-
-            // Update internal state and request a redraw
-            state.update();
-            window.request_redraw();
+            _ => {}
         }
+        state.update(); //Update state
+        window.request_redraw(); //Redraw window
     });
 }
 
