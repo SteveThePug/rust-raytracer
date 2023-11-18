@@ -7,7 +7,7 @@ const BUFFER_PROPORTION_MAX: f32 = 0.9;
 
 const RAYS_INIT: i32 = 100;
 const RAYS_MIN: i32 = 100;
-const RAYS_MAX: i32 = 1000;
+const RAYS_MAX: i32 = 10000;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`.
 pub(crate) struct Gui {

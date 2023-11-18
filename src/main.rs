@@ -163,7 +163,7 @@ impl State {
             let mut pixels = self.pixels.lock().unwrap();
             let frame = pixels.frame_mut();
             frame[i * 4..(i + 1) * 4].copy_from_slice(&rgba);
-            self.index = self.index + 1;
+            self.index = (self.index + 1) % (frame.len() / 4);
         }
     }
 
