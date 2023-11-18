@@ -223,7 +223,7 @@ fn main() -> Result<(), Error> {
     // let cone = Arc::new(Cone::new(0.25, 1.0, -0.5, turquoise.clone()));
     // primitives.push(cone.clone());
     let mut primitives: Vec<Box<dyn Primitive>> = Vec::new();
-    let cube = Box::new(Cube::unit(blue.clone()));
+    let cube = Box::new(Sphere::unit(blue.clone()));
     primitives.push(cube);
     //Lights
     let light_pos = Point3::new(10.0, 12.0, 10.0);
