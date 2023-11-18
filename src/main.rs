@@ -161,8 +161,8 @@ impl State {
                 None => COLOUR_CLEAR,
             };
             let mut pixels = self.pixels.lock().unwrap();
-            let frame = pixels.frame_mut().chunks_exact_mut(4).nth(i).unwrap();
-            frame.copy_from_slice(&rgba);
+            let frame = pixels.frame_mut();
+            frame[i * 4..(i + 1) * 4].copy_from_slice(&rgba);
             self.index = self.index + 1;
         }
     }
