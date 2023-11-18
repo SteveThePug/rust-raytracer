@@ -69,7 +69,7 @@ impl Camera {
     pub fn cast_rays(&self, width: u32, height: u32) -> Vec<Ray> {
         //All good
         let aspect = width as f64 / height as f64;
-        let fovy_radians = (self.fovy as f64).to_radians();
+        let fovy_radians = self.fovy as f64;
         let fovh_radians = 2.0 * ((fovy_radians / 2.0).tan() * aspect).atan();
         // All good
         let view_direction = self.target - self.eye;
@@ -92,9 +92,6 @@ impl Camera {
 
                 let direction = view_direction + horizontal + vertical;
                 let ray = Ray::new(self.eye, Unit::new_normalize(direction));
-                if i == j {
-                    println!("{}", ray.b.into_inner());
-                }
                 rays.push(ray);
             }
         }
