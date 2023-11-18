@@ -244,7 +244,7 @@ impl Primitive for Circle {
         };
         let intersect = ray.at_t(t);
         let distance = distance(&intersect, &self.position);
-        match distance > self.radius {
+        match distance >= self.radius {
             true => return None,
             false => {
                 return Some(Intersection {
@@ -297,14 +297,14 @@ impl Primitive for Cylinder {
 pub struct Cone {
     radius: f32,
     base: f32,
-    height: f32,
+    apex: f32,
     circle: Circle,
     material: Arc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Cone {
-    pub fn new(radius: f32, height: f32, base: f32, material: Arc<Material>) -> Self {
+    pub fn new(radius: f32, apex: f32, base: f32, material: Arc<Material>) -> Self {
         let circle = Circle::new(
             Point3::new(0.0, base, 0.0),
             radius,
@@ -312,11 +312,11 @@ impl Cone {
             Arc::clone(&material),
         );
         let bln = Point3::new(-radius, base, -radius);
-        let trf = Point3::new(radius, base + height, radius);
+        let trf = Point3::new(radius, base + apex, radius);
         Cone {
-            radius,
+            radius: radius / 2.0,
             base,
-            height,
+            apex,
             circle,
             material,
             bounding_box: BoundingBox { bln, trf },
@@ -328,7 +328,7 @@ impl Cone {
 
     pub fn get_normal(&self, intersect: Point3<f32>) -> Vector3<f32> {
         let r = self.radius;
-        let h = self.height;
+        let h = self.apex;
         let (x, y, z) = (intersect.x, intersect.y, intersect.z);
         let normal = Vector3::new(2.0 * x, 2.0 * r * r * (h - y), 2.0 * z).normalize();
         normal
@@ -339,7 +339,7 @@ impl Primitive for Cone {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         let point = &ray.a;
         let dir = &ray.b;
-        let (r, h) = (self.radius, self.height);
+        let (r, h) = (self.radius, self.apex);
         let (a1, a2, a3) = (point.x, point.y, point.z);
         let (b1, b2, b3) = (dir.x, dir.y, dir.z);
         let r2 = r * r;
@@ -368,7 +368,7 @@ impl Primitive for Cone {
             None => None,
             Some(t) => {
                 let intersect = ray.at_t(t);
-                match intersect.y >= self.base && intersect.y <= self.height {
+                match intersect.y >= self.base && intersect.y <= self.apex {
                     true => Some(Intersection {
                         point: intersect,
                         normal: Unit::new_normalize(self.get_normal(intersect)),

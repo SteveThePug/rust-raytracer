@@ -69,10 +69,10 @@ impl Camera {
     pub fn cast_rays(&self, width: u32, height: u32) -> Vec<Ray> {
         //All good
         let aspect = width as f64 / height as f64;
-        let fovy_radians = self.fovy as f64;
+        let fovy_radians = (self.fovy as f64).to_radians();
         let fovh_radians = 2.0 * ((fovy_radians / 2.0).tan() * aspect).atan();
         // All good
-        let view_direction = self.target - self.eye;
+        let view_direction = (self.target - self.eye).normalize();
         //All good
         let hor = view_direction.cross(&self.up).normalize(); // pointing right
         let vert = view_direction.cross(&hor).normalize(); // pointing up
@@ -122,5 +122,9 @@ impl Camera {
         );
 
         Ray::new(self.eye, direction)
+    }
+
+    pub fn set_position(&mut self, eye: Point3<f32>) {
+        self.eye = eye;
     }
 }

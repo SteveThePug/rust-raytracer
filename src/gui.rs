@@ -1,3 +1,4 @@
+use nalgebra::Point3;
 use pixels::{wgpu, PixelsContext};
 use std::time::Instant;
 
@@ -5,9 +6,13 @@ const BUFFER_PROPORTION_INIT: f32 = 0.8;
 const BUFFER_PROPORTION_MIN: f32 = 0.5;
 const BUFFER_PROPORTION_MAX: f32 = 0.9;
 
-const RAYS_INIT: i32 = 100;
+const RAYS_INIT: i32 = 9000;
 const RAYS_MIN: i32 = 100;
 const RAYS_MAX: i32 = 10000;
+
+const CAMERA_MIN: f32 = -10.0;
+const CAMERA_MAX: f32 = 10.0;
+const CAMERA_INIT: f32 = 5.0;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`.
 pub(crate) struct Gui {
@@ -19,8 +24,12 @@ pub(crate) struct Gui {
     about_open: bool,
 
     pub ray_num: i32,
+
     pub buffer_proportion: f32,
     pub buffer_resize: bool,
+
+    pub camera_eye: Point3<f32>,
+    pub camera_reposition: bool,
 }
 
 impl Gui {
@@ -73,6 +82,8 @@ impl Gui {
             ray_num: RAYS_INIT,
             buffer_proportion: BUFFER_PROPORTION_INIT,
             buffer_resize: false,
+            camera_eye: Point3::new(CAMERA_INIT, CAMERA_INIT, CAMERA_INIT),
+            camera_reposition: false,
         }
     }
 
@@ -125,6 +136,20 @@ impl Gui {
             buffer_resize = true
         };
         self.buffer_resize = buffer_resize;
+
+        let mut camera_reposition = false;
+        ui.text("Vector3 Input:");
+        // Create three input fields for x, y, and z components
+        ui.slider("X", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[0]);
+        ui.slider("Y", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[1]);
+        ui.slider("Z", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[2]);
+        // Check if any component of the Vector3 has changed
+        if ui.button("Apply") {
+            println!("Camera changed: {:?}", self.camera_eye);
+            self.camera_eye = Point3::from(self.camera_eye);
+            camera_reposition = true;
+        }
+        self.camera_reposition = camera_reposition;
 
         // Render Dear ImGui with WGPU
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

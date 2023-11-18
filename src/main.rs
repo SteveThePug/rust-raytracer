@@ -80,7 +80,7 @@ impl State {
 
     /// Update the `World` internal state; bounce the box around the screen.
     fn update(&mut self) -> bool {
-        if self.gui.buffer_resize {
+        if self.gui.buffer_resize || self.gui.camera_reposition {
             let pixels = &self.pixels;
             let size = self.window.inner_size();
             let width_new = (size.width as f32 * self.gui.buffer_proportion) as u32;
@@ -92,6 +92,7 @@ impl State {
                 return false;
             }
             self.index = 0;
+            self.camera.set_position(self.gui.camera_eye);
             self.rays = Arc::new(self.camera.cast_rays(width_new, height_new));
         }
         true
@@ -204,38 +205,33 @@ fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
     //SCENE
     //Camera
-    let eye = Point3::new(100.0, 100.0, 100.0);
+    let eye = Point3::new(10.0, 0.0, 10.0);
     let target = Point3::new(0.0, 0.0, 0.0);
     let up = Vector3::new(0.0, 1.0, 0.0);
     let camera = Camera::new(
         eye,
         target,
         up,
-        70.0,
+        90.0,
         (START_WIDTH as f32 / START_HEIGHT as f32) as f32,
     );
-    // SETUP PRIMITIVES
+    // SETUP MATERIALS
     let magenta = Arc::new(Material::magenta());
     let blue = Arc::new(Material::blue());
     let turquoise = Arc::new(Material::turquoise());
     let red = Arc::new(Material::red());
-    // let sphere = Arc::new(Sphere::unit(magenta.clone()));
-    // primitives.push(sphere.clone());
-    // let cone = Arc::new(Cone::new(0.25, 1.0, -0.5, turquoise.clone()));
-    // primitives.push(cone.clone());
+    // SETUP PRIMITIVES
     let mut primitives: Vec<Box<dyn Primitive>> = Vec::new();
-    let cube = Box::new(Cube::unit(turquoise.clone()));
-    let sphere = Box::new(Sphere::new(Point3::new(0.0, 4.0, 0.0), 1.0, red.clone()));
-    let cone = Box::new(Circle::new(
-        Point3::new(0.0, -3.0, 0.0),
-        2.0,
-        Vector3::new(0.0, 1.0, 0.0),
-        magenta.clone(),
-    ));
-    primitives.push(cube);
+    //let cube = Box::new(Cube::unit(turquoise.clone()));
+    // primitives.push(cube);
+    let sphere = Box::new(Sphere::new(Point3::new(0.0, -2.0, 0.0), 1.0, red.clone()));
+    let sphere2 = Box::new(Sphere::new(Point3::new(0.0, 2.0, 0.0), 1.0, red.clone()));
+    let cone = Box::new(Cone::new(1.0, 1.0, -1.0, magenta.clone()));
     primitives.push(sphere);
+    primitives.push(sphere2);
     primitives.push(cone);
-    //Lights
+
+    // SETUP LIGHTS
     let light_pos = Point3::new(0.0, 12.0, 4.0);
     let light_colour = Vector3::new(0.4, 0.4, 0.6);
     let light_falloff = [1.0, 0.00, 0.00];
