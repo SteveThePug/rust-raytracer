@@ -16,7 +16,7 @@ pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: i32, height: i32) -> Ve
     let mut pixel_data = vec![Vector3::new(0, 0, 0); (width * height) as usize];
 
     for (pixel_index, ray) in rays.iter().enumerate() {
-        let intersect = get_closest_intersection(scene.primitives.clone(), ray);
+        let intersect = get_closest_intersection(&scene.primitives, ray);
         let colour = match intersect {
             Some(intersect) => phong_shade_point(scene, &intersect),
             None => {
@@ -30,7 +30,7 @@ pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: i32, height: i32) -> Ve
 }
 //Shade a single ray
 pub fn shade_ray(scene: &Scene, ray: &Ray) -> Option<Vector3<u8>> {
-    let intersect = get_closest_intersection(scene.primitives.clone(), ray);
+    let intersect = get_closest_intersection(&scene.primitives, ray);
     match intersect {
         Some(intersect) => Some(phong_shade_point(&scene, &intersect)),
         None => None,
@@ -39,7 +39,7 @@ pub fn shade_ray(scene: &Scene, ray: &Ray) -> Option<Vector3<u8>> {
 
 // Find the closest intersection, given a ray in world coordinates
 pub fn get_closest_intersection(
-    primitives: Vec<Arc<dyn Primitive>>,
+    primitives: &Vec<Box<dyn Primitive>>,
     ray: &Ray,
 ) -> Option<Intersection> {
     let mut closest_distance = INFINITY;
@@ -80,14 +80,14 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
     // Let us first compute the ambient light component and set it as out base colour
     let mut colour = kd.component_mul(ambient_light);
 
-    for arc_light in &scene.lights {
+    for arc_light in scene.lights.as_ref() {
         let light = arc_light.clone();
 
         let Light {
             position: light_position,
             colour: light_colour,
             falloff: light_falloff,
-        } = light.as_ref();
+        } = light;
 
         // Get light incidence vector
         let to_light = light_position - point;

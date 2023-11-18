@@ -1,6 +1,14 @@
 use pixels::{wgpu, PixelsContext};
 use std::time::Instant;
 
+const BUFFER_PROPORTION_INIT: f32 = 0.8;
+const BUFFER_PROPORTION_MIN: f32 = 0.5;
+const BUFFER_PROPORTION_MAX: f32 = 0.9;
+
+const RAYS_INIT: i32 = 100;
+const RAYS_MIN: i32 = 100;
+const RAYS_MAX: i32 = 1000;
+
 /// Manages all state required for rendering Dear ImGui over `Pixels`.
 pub(crate) struct Gui {
     imgui: imgui::Context,
@@ -10,7 +18,9 @@ pub(crate) struct Gui {
     last_cursor: Option<imgui::MouseCursor>,
     about_open: bool,
 
-    pub num_rays: i32,
+    pub ray_num: i32,
+    pub buffer_proportion: f32,
+    pub buffer_resize: bool,
 }
 
 impl Gui {
@@ -60,7 +70,9 @@ impl Gui {
             last_frame: Instant::now(),
             last_cursor: None,
             about_open: true,
-            num_rays: 8,
+            ray_num: RAYS_INIT,
+            buffer_proportion: BUFFER_PROPORTION_INIT,
+            buffer_resize: false,
         }
     }
 
@@ -96,11 +108,23 @@ impl Gui {
         // Draw windows and GUI elements here
         let mut about_open = false;
         ui.main_menu_bar(|| {
-            ui.menu("Options", || {
+            ui.menu("Help", || {
                 about_open = ui.menu_item("About...");
             });
         });
-        ui.slider("Num rays", 1, 100, &mut self.num_rays);
+        ui.slider("# Rays: ", RAYS_MIN, RAYS_MAX, &mut self.ray_num);
+
+        ui.slider(
+            "% Buffer: ",
+            BUFFER_PROPORTION_MIN,
+            BUFFER_PROPORTION_MAX,
+            &mut self.buffer_proportion,
+        );
+        let mut buffer_resize = false;
+        if ui.button("Change Buffer") {
+            buffer_resize = true
+        };
+        self.buffer_resize = buffer_resize;
 
         // Render Dear ImGui with WGPU
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

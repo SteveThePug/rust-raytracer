@@ -12,6 +12,7 @@ pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::new(
     0.0, 0.0, 0.0, 1.0,
 );
 
+#[derive(Clone)]
 pub struct Camera {
     eye: Point3<f32>,
     target: Point3<f32>,
@@ -65,7 +66,7 @@ impl Camera {
         (matrix, inverse)
     }
 
-    pub fn cast_rays(&self, width: i32, height: i32) -> Vec<Ray> {
+    pub fn cast_rays(&self, width: u32, height: u32) -> Vec<Ray> {
         //All good
         let aspect = width as f64 / height as f64;
         let fovy_radians = (self.fovy as f64).to_radians();
@@ -97,7 +98,7 @@ impl Camera {
         rays
     }
 
-    pub fn cast_ray(&self, width: i32, height: i32, x: i32, y: i32) -> Ray {
+    pub fn cast_ray(&self, width: u32, height: u32, x: u32, y: u32) -> Ray {
         let aspect = width as f64 / height as f64;
         let fovy_radians = (self.fovy as f64).to_radians();
         let fovh_radians = 2.0 * ((fovy_radians / 2.0).tan() * aspect).atan();
