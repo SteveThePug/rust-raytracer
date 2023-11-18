@@ -127,6 +127,26 @@ impl State {
     ///
     /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
     fn draw(&mut self) {
+        // We want to multithread this function
+        //let mut threads = vec![];
+        // threads.push(thread::spawn({
+        //     let pixels = self.pixels.clone();
+        //     move || {
+        //         // let colour = {
+        //         //     let ray = &self.rays[i];
+        //         //     raytracer::shade_ray(&self.scene, &ray)
+        //         // };
+        //
+        //         // let rgba = match colour {
+        //         //     Some(colour) => [colour.x, colour.y, colour.z, 255],
+        //         //     None => COLOUR_CLEAR,
+        //         // };
+        //         let mut pixels = pixels.lock().unwrap();
+        //         let frame = pixels.frame_mut().chunks_exact_mut(4).nth(i).unwrap();
+        //         frame.copy_from_slice(&[200, 100, 100, 255]);
+        //     }
+        // }));
+
         for i in 0..self.gui.ray_num {
             let i = self.index as usize;
             let ray_num = self.gui.ray_num;
