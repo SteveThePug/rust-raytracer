@@ -12,6 +12,6 @@ impl Ray {
         Ray { a, b }
     }
     pub fn at_t(&self, t: f32) -> Point3<f32> {
-        self.a + self.b.as_ref() * (t + EPSILON)
+        self.a + self.b.into_inner() * (t + EPSILON)
     }
 }

@@ -24,20 +24,20 @@ impl Material {
         Material { kd, ks, shininess }
     }
     pub fn turquoise() -> Self {
-        let kd = Vector3::new(0.25, 1.0, 0.7);
-        let ks = Vector3::new(0.25, 1.0, 0.7);
+        let kd = Vector3::new(0.25, 0.3, 0.7);
+        let ks = Vector3::new(0.25, 0.3, 0.7);
         let shininess = 0.5;
         Material { kd, ks, shininess }
     }
     pub fn red() -> Self {
-        let kd = Vector3::new(1.0, 0.0, 0.0);
-        let ks = Vector3::new(1.0, 0.0, 0.0);
+        let kd = Vector3::new(0.8, 0.0, 0.3);
+        let ks = Vector3::new(0.8, 0.3, 0.0);
         let shininess = 0.5;
         Material { kd, ks, shininess }
     }
     pub fn blue() -> Self {
-        let kd = Vector3::new(0.0, 0.0, 1.0);
-        let ks = Vector3::new(0.0, 0.0, 1.0);
+        let kd = Vector3::new(0.0, 0.3, 0.6);
+        let ks = Vector3::new(0.3, 0.0, 0.6);
         let shininess = 0.5;
         Material { kd, ks, shininess }
     }
@@ -119,7 +119,7 @@ pub struct Sphere {
 }
 
 impl Sphere {
-    fn new(position: Point3<f32>, radius: f32, material: Arc<Material>) -> Self {
+    pub fn new(position: Point3<f32>, radius: f32, material: Arc<Material>) -> Self {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
@@ -186,7 +186,7 @@ impl Primitive for Sphere {
 }
 
 // CIRCLE -----------------------------------------------------------------
-struct Circle {
+pub struct Circle {
     position: Point3<f32>,
     radius: f32,
     normal: Vector3<f32>,
@@ -195,7 +195,7 @@ struct Circle {
 }
 
 impl Circle {
-    fn new(
+    pub fn new(
         position: Point3<f32>,
         radius: f32,
         normal: Vector3<f32>,

@@ -204,36 +204,56 @@ fn main() -> Result<(), Error> {
     let event_loop = EventLoop::new();
     //SCENE
     //Camera
-    let eye = Point3::new(10.0, 10.0, 10.0);
+    let eye = Point3::new(100.0, 100.0, 100.0);
     let target = Point3::new(0.0, 0.0, 0.0);
     let up = Vector3::new(0.0, 1.0, 0.0);
     let camera = Camera::new(
         eye,
         target,
         up,
-        120.0,
+        70.0,
         (START_WIDTH as f32 / START_HEIGHT as f32) as f32,
     );
     // SETUP PRIMITIVES
     let magenta = Arc::new(Material::magenta());
     let blue = Arc::new(Material::blue());
     let turquoise = Arc::new(Material::turquoise());
+    let red = Arc::new(Material::red());
     // let sphere = Arc::new(Sphere::unit(magenta.clone()));
     // primitives.push(sphere.clone());
     // let cone = Arc::new(Cone::new(0.25, 1.0, -0.5, turquoise.clone()));
     // primitives.push(cone.clone());
     let mut primitives: Vec<Box<dyn Primitive>> = Vec::new();
-    let cube = Box::new(Sphere::unit(blue.clone()));
+    let cube = Box::new(Cube::unit(turquoise.clone()));
+    let sphere = Box::new(Sphere::new(Point3::new(0.0, 4.0, 0.0), 1.0, red.clone()));
+    let cone = Box::new(Circle::new(
+        Point3::new(0.0, -3.0, 0.0),
+        2.0,
+        Vector3::new(0.0, 1.0, 0.0),
+        magenta.clone(),
+    ));
     primitives.push(cube);
+    primitives.push(sphere);
+    primitives.push(cone);
     //Lights
-    let light_pos = Point3::new(10.0, 12.0, 10.0);
-    let light_colour = Vector3::new(1.0, 0.0, 1.0);
+    let light_pos = Point3::new(0.0, 12.0, 4.0);
+    let light_colour = Vector3::new(0.4, 0.4, 0.6);
     let light_falloff = [1.0, 0.00, 0.00];
     let light = Light::new(light_colour, light_pos, light_falloff);
 
+    let light_pos2 = Point3::new(10.0, 12.0, -4.0);
+    let light_colour2 = Vector3::new(0.4, 0.0, 0.6);
+    let light_falloff2 = [1.0, 0.00, 0.00];
+    let light2 = Light::new(light_colour2, light_pos2, light_falloff2);
+
     let ambient_light = Vector3::new(0.0, 0.0, 0.2);
 
-    let scene = Scene::new(primitives, vec![light], vec![camera.clone()], ambient_light);
+    let scene = Scene::new(
+        primitives,
+        vec![light, light2],
+        vec![camera.clone()],
+        ambient_light,
+    );
     //State
     let window = {
         let size = LogicalSize::new(START_WIDTH, START_HEIGHT);
@@ -253,7 +273,6 @@ fn main() -> Result<(), Error> {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
-                    return;
                 }
                 WindowEvent::Resized(size) => {
                     state.resize(&size);

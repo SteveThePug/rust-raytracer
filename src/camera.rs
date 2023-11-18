@@ -92,6 +92,9 @@ impl Camera {
 
                 let direction = view_direction + horizontal + vertical;
                 let ray = Ray::new(self.eye, Unit::new_normalize(direction));
+                if i == j {
+                    println!("{}", ray.b.into_inner());
+                }
                 rays.push(ray);
             }
         }
