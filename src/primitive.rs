@@ -8,6 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 // MATERIAL -----------------------------------------------------------------
+#[derive(Clone)]
 pub struct Material {
     pub kd: Vector3<f32>,
     pub ks: Vector3<f32>,
@@ -75,6 +76,7 @@ impl Intersection {
     }
 }
 // BOUNDING BOX -----------------------------------------------------------------
+#[derive(Clone)]
 struct BoundingBox {
     bln: Point3<f32>,
     trf: Point3<f32>,
@@ -111,6 +113,7 @@ pub trait Primitive: Send + Sync {
 }
 
 // SPHERE -----------------------------------------------------------------
+#[derive(Clone)]
 pub struct Sphere {
     position: Point3<f32>,
     radius: f32,
@@ -186,6 +189,7 @@ impl Primitive for Sphere {
 }
 
 // CIRCLE -----------------------------------------------------------------
+#[derive(Clone)]
 pub struct Circle {
     position: Point3<f32>,
     radius: f32,
@@ -294,6 +298,7 @@ impl Primitive for Cylinder {
 }
 
 // CONE -----------------------------------------------------------------
+#[derive(Clone)]
 pub struct Cone {
     radius: f32,
     base: f32,
@@ -495,6 +500,7 @@ impl Primitive for Rectangle {
 }
 
 // BOX -----------------------------------------------------------------
+#[derive(Clone)]
 pub struct Cube {
     width: f32,
     height: f32,
