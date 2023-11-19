@@ -1,5 +1,6 @@
 use nalgebra::{Point3, Vector3};
 
+#[derive(Clone)]
 pub struct Light {
     pub colour: Vector3<f32>,
     pub position: Point3<f32>,
