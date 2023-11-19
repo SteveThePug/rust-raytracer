@@ -2,9 +2,10 @@ use crate::{
     light::Light,
     primitive::{Intersection, Primitive},
     ray::Ray,
-    scene::Scene,
+    scene::*,
     INFINITY,
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use nalgebra::{distance, Matrix4, Point3, Unit, Vector3, Vector4};
@@ -16,7 +17,7 @@ pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: i32, height: i32) -> Ve
     let mut pixel_data = vec![Vector3::new(0, 0, 0); (width * height) as usize];
 
     for (pixel_index, ray) in rays.iter().enumerate() {
-        let intersect = get_closest_intersection(&scene.primitives, ray);
+        let intersect = get_closest_intersection(&scene.nodes, ray);
         let colour = match intersect {
             Some(intersect) => phong_shade_point(scene, &intersect),
             None => {
@@ -30,7 +31,7 @@ pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: i32, height: i32) -> Ve
 }
 //Shade a single ray
 pub fn shade_ray(scene: &Scene, ray: &Ray) -> Option<Vector3<u8>> {
-    let intersect = get_closest_intersection(&scene.primitives, ray);
+    let intersect = get_closest_intersection(&scene.nodes, ray);
     match intersect {
         Some(intersect) => Some(phong_shade_point(&scene, &intersect)),
         None => None,
@@ -38,15 +39,12 @@ pub fn shade_ray(scene: &Scene, ray: &Ray) -> Option<Vector3<u8>> {
 }
 
 // Find the closest intersection, given a ray in world coordinates
-pub fn get_closest_intersection(
-    primitives: &Vec<Box<dyn Primitive>>,
-    ray: &Ray,
-) -> Option<Intersection> {
+pub fn get_closest_intersection(nodes: &Vec<Node>, ray: &Ray) -> Option<Intersection> {
     let mut closest_distance = INFINITY;
     let mut closest_intersect: Option<Intersection> = None;
 
-    for arc_primitive in primitives {
-        let primitive = arc_primitive.clone();
+    for node in nodes {
+        let primitive = node.primitive.clone();
 
         if let Some(intersect) = primitive.intersect_ray(ray) {
             if intersect.distance < closest_distance {
@@ -70,8 +68,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         material,
         ..
     } = intersect;
-    let binding = scene.ambient_light.clone();
-    let ambient_light = binding.as_ref();
+    let ambient_light = &scene.ambient_light;
     let kd = material.kd;
     let ks = material.ks;
     let shininess = material.shininess;
@@ -80,9 +77,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
     // Let us first compute the ambient light component and set it as out base colour
     let mut colour = kd.component_mul(ambient_light);
 
-    for arc_light in scene.lights.as_ref() {
-        let light = arc_light.clone();
-
+    for light in &scene.lights {
         let Light {
             position: light_position,
             colour: light_colour,

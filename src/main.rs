@@ -39,20 +39,19 @@ const EPSILON_VECTOR: Vector3<f32> = Vector3::new(EPSILON, EPSILON, EPSILON);
 const INFINITY_VECTOR: Vector3<f32> = Vector3::new(INFINITY, INFINITY, INFINITY);
 
 struct State {
-    scene: Arc<Scene>,
+    scene: Scene,
     window: Window,
     pixels: Arc<Mutex<Pixels>>,
     gui: Gui,
 
     index: usize,
 
-    camera: Camera,
     rays: Arc<Vec<Ray>>,
 }
 
 impl State {
     /// Create a new `World` instance that can draw a moving box.
-    fn new(window: Window, scene: Scene, camera: Camera) -> Self {
+    fn new(window: Window, scene: Scene) -> Self {
         let window_size = window.inner_size();
         let pixels = {
             let surface_texture =
@@ -65,14 +64,15 @@ impl State {
             .unwrap()
         };
         let gui = Gui::new(&window, &pixels);
-        let rays = camera.cast_rays(window_size.width, window_size.height);
+        let rays = scene
+            .camera
+            .cast_rays(window_size.width, window_size.height);
         Self {
-            scene: Arc::new(scene),
+            scene,
             window,
             pixels: Arc::new(Mutex::new(pixels)),
             gui,
 
-            camera,
             index: 0,
             rays: Arc::new(rays),
         }
@@ -92,8 +92,8 @@ impl State {
                 return false;
             }
             self.index = 0;
-            self.camera.set_position(self.gui.camera_eye);
-            self.rays = Arc::new(self.camera.cast_rays(width_new, height_new));
+            self.scene.camera.set_position(self.gui.camera_eye);
+            self.rays = Arc::new(self.scene.camera.cast_rays(width_new, height_new));
         }
         true
     }
@@ -201,55 +201,57 @@ impl State {
 fn main() -> Result<(), Error> {
     env_logger::init();
     env::set_var("RUST_BACKTRACE", "1");
+    Scene::init("test.rhai").expect("Could not read lua file");
+
     //Window
     let event_loop = EventLoop::new();
     //SCENE
-    //Camera
-    let eye = Point3::new(10.0, 0.0, 10.0);
-    let target = Point3::new(0.0, 0.0, 0.0);
-    let up = Vector3::new(0.0, 1.0, 0.0);
-    let camera = Camera::new(
-        eye,
-        target,
-        up,
-        90.0,
-        (START_WIDTH as f32 / START_HEIGHT as f32) as f32,
-    );
-    // SETUP MATERIALS
-    let magenta = Arc::new(Material::magenta());
-    let blue = Arc::new(Material::blue());
-    let turquoise = Arc::new(Material::turquoise());
-    let red = Arc::new(Material::red());
-    // SETUP PRIMITIVES
-    let mut primitives: Vec<Box<dyn Primitive>> = Vec::new();
-    //let cube = Box::new(Cube::unit(turquoise.clone()));
-    // primitives.push(cube);
-    let sphere = Box::new(Sphere::new(Point3::new(0.0, -2.0, 0.0), 1.0, red.clone()));
-    let sphere2 = Box::new(Sphere::new(Point3::new(0.0, 2.0, 0.0), 1.0, red.clone()));
-    let cone = Box::new(Cone::new(1.0, 1.0, -1.0, magenta.clone()));
-    primitives.push(sphere);
-    primitives.push(sphere2);
-    primitives.push(cone);
-
-    // SETUP LIGHTS
-    let light_pos = Point3::new(0.0, 12.0, 4.0);
-    let light_colour = Vector3::new(0.4, 0.4, 0.6);
-    let light_falloff = [1.0, 0.00, 0.00];
-    let light = Light::new(light_colour, light_pos, light_falloff);
-
-    let light_pos2 = Point3::new(10.0, 12.0, -4.0);
-    let light_colour2 = Vector3::new(0.4, 0.0, 0.6);
-    let light_falloff2 = [1.0, 0.00, 0.00];
-    let light2 = Light::new(light_colour2, light_pos2, light_falloff2);
-
-    let ambient_light = Vector3::new(0.0, 0.0, 0.2);
-
-    let scene = Scene::new(
-        primitives,
-        vec![light, light2],
-        vec![camera.clone()],
-        ambient_light,
-    );
+    // //Camera
+    // let eye = Point3::new(10.0, 0.0, 10.0);
+    // let target = Point3::new(0.0, 0.0, 0.0);
+    // let up = Vector3::new(0.0, 1.0, 0.0);
+    // let camera = Camera::new(
+    //     eye,
+    //     target,
+    //     up,
+    //     90.0,
+    //     (START_WIDTH as f32 / START_HEIGHT as f32) as f32,
+    // );
+    // // SETUP MATERIALS
+    // let magenta = Arc::new(Material::magenta());
+    // let blue = Arc::new(Material::blue());
+    // let turquoise = Arc::new(Material::turquoise());
+    // let red = Arc::new(Material::red());
+    // // SETUP PRIMITIVES
+    // let mut primitives: Vec<Box<dyn Primitive>> = Vec::new();
+    // //let cube = Box::new(Cube::unit(turquoise.clone()));
+    // // primitives.push(cube);
+    // let sphere = Box::new(Sphere::new(Point3::new(0.0, -2.0, 0.0), 1.0, red.clone()));
+    // let sphere2 = Box::new(Sphere::new(Point3::new(0.0, 2.0, 0.0), 1.0, red.clone()));
+    // let cone = Box::new(Cone::new(1.0, 1.0, -1.0, magenta.clone()));
+    // primitives.push(sphere);
+    // primitives.push(sphere2);
+    // primitives.push(cone);
+    //
+    // // SETUP LIGHTS
+    // let light_pos = Point3::new(0.0, 12.0, 4.0);
+    // let light_colour = Vector3::new(0.4, 0.4, 0.6);
+    // let light_falloff = [1.0, 0.00, 0.00];
+    // let light = Light::new(light_colour, light_pos, light_falloff);
+    //
+    // let light_pos2 = Point3::new(10.0, 12.0, -4.0);
+    // let light_colour2 = Vector3::new(0.4, 0.0, 0.6);
+    // let light_falloff2 = [1.0, 0.00, 0.00];
+    // let light2 = Light::new(light_colour2, light_pos2, light_falloff2);
+    //
+    // let ambient_light = Vector3::new(0.0, 0.0, 0.2);
+    //
+    // let scene = Scene::new(
+    //     primitives,
+    //     vec![light, light2],
+    //     vec![camera.clone()],
+    //     ambient_light,
+    // );
     //State
     let window = {
         let size = LogicalSize::new(START_WIDTH, START_HEIGHT);
@@ -260,7 +262,8 @@ fn main() -> Result<(), Error> {
             .build(&event_loop)
             .unwrap()
     };
-    let mut state = State::new(window, scene, camera);
+    let scene = Scene::empty();
+    let mut state = State::new(window, scene);
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
@@ -269,6 +272,7 @@ fn main() -> Result<(), Error> {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
+                    return;
                 }
                 WindowEvent::Resized(size) => {
                     state.resize(&size);

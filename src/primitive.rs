@@ -15,38 +15,38 @@ pub struct Material {
     pub shininess: f32,
 }
 impl Material {
-    pub fn new(kd: Vector3<f32>, ks: Vector3<f32>, shininess: f32) -> Self {
-        Material { kd, ks, shininess }
+    pub fn new(kd: Vector3<f32>, ks: Vector3<f32>, shininess: f32) -> Arc<Self> {
+        Arc::new(Material { kd, ks, shininess })
     }
-    pub fn magenta() -> Self {
+    pub fn magenta() -> Arc<Self> {
         let kd = Vector3::new(1.0, 0.0, 1.0);
         let ks = Vector3::new(1.0, 0.0, 1.0);
         let shininess = 0.5;
-        Material { kd, ks, shininess }
+        Arc::new(Material { kd, ks, shininess })
     }
-    pub fn turquoise() -> Self {
+    pub fn turquoise() -> Arc<Self> {
         let kd = Vector3::new(0.25, 0.3, 0.7);
         let ks = Vector3::new(0.25, 0.3, 0.7);
         let shininess = 0.5;
-        Material { kd, ks, shininess }
+        Arc::new(Material { kd, ks, shininess })
     }
-    pub fn red() -> Self {
+    pub fn red() -> Arc<Self> {
         let kd = Vector3::new(0.8, 0.0, 0.3);
         let ks = Vector3::new(0.8, 0.3, 0.0);
         let shininess = 0.5;
-        Material { kd, ks, shininess }
+        Arc::new(Material { kd, ks, shininess })
     }
-    pub fn blue() -> Self {
+    pub fn blue() -> Arc<Self> {
         let kd = Vector3::new(0.0, 0.3, 0.6);
         let ks = Vector3::new(0.3, 0.0, 0.6);
         let shininess = 0.5;
-        Material { kd, ks, shininess }
+        Arc::new(Material { kd, ks, shininess })
     }
-    pub fn green() -> Self {
+    pub fn green() -> Arc<Self> {
         let kd = Vector3::new(0.0, 1.0, 0.0);
         let ks = Vector3::new(0.0, 1.0, 0.0);
         let shininess = 0.5;
-        Material { kd, ks, shininess }
+        Arc::new(Material { kd, ks, shininess })
     }
 }
 // INTERSECTION -----------------------------------------------------------------
@@ -122,20 +122,20 @@ pub struct Sphere {
 }
 
 impl Sphere {
-    pub fn new(position: Point3<f32>, radius: f32, material: Arc<Material>) -> Self {
+    pub fn new(position: Point3<f32>, radius: f32, material: Arc<Material>) -> Arc<dyn Primitive> {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
         let bounding_box = BoundingBox::new(bln, trf);
-        Sphere {
+        Arc::new(Sphere {
             position,
             radius,
             bounding_box,
             material,
-        }
+        })
     }
 
-    pub fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
         Sphere::new(Point3::new(0.0, 0.0, 0.0), 1.0, material)
     }
 }
@@ -204,21 +204,21 @@ impl Circle {
         radius: f32,
         normal: Vector3<f32>,
         material: Arc<Material>,
-    ) -> Self {
+    ) -> Arc<dyn Primitive> {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
         let bounding_box = BoundingBox::new(bln, trf);
-        Circle {
+        Arc::new(Circle {
             position,
             radius,
             normal: normal.normalize(),
             material,
             bounding_box,
-        }
+        })
     }
 
-    pub fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
         let position = Point3::new(0.0, 0.0, 0.0);
         let normal = Vector3::new(0.0, 1.0, 0.0);
         let radius = 1.0;
@@ -228,13 +228,13 @@ impl Circle {
         let trf = Point3::new(radius, 0.0, EPSILON);
         let bounding_box = BoundingBox { bln, trf };
 
-        Circle {
+        Arc::new(Circle {
             position,
             normal,
             radius,
             material,
             bounding_box,
-        }
+        })
     }
 }
 
@@ -303,13 +303,13 @@ pub struct Cone {
     radius: f32,
     base: f32,
     apex: f32,
-    circle: Circle,
+    circle: Arc<dyn Primitive>,
     material: Arc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Cone {
-    pub fn new(radius: f32, apex: f32, base: f32, material: Arc<Material>) -> Self {
+    pub fn new(radius: f32, apex: f32, base: f32, material: Arc<Material>) -> Arc<dyn Primitive> {
         let circle = Circle::new(
             Point3::new(0.0, base, 0.0),
             radius,
@@ -318,16 +318,16 @@ impl Cone {
         );
         let bln = Point3::new(-radius, base, -radius);
         let trf = Point3::new(radius, base + apex, radius);
-        Cone {
+        Arc::new(Cone {
             radius: radius / 2.0,
             base,
             apex,
             circle,
             material,
             bounding_box: BoundingBox { bln, trf },
-        }
+        })
     }
-    pub fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
         Cone::new(1.0, 2.0, -1.0, material)
     }
 
@@ -431,13 +431,13 @@ impl Rectangle {
         width: f32,
         height: f32,
         material: Arc<Material>,
-    ) -> Self {
+    ) -> Arc<dyn Primitive> {
         let normal = normal.normalize();
         let width_direction = width_direction.normalize();
         let height_direction = width_direction.cross(&normal);
         let bln = position - width / 2.0 * width_direction - height / 2.0 * height_direction;
         let trf = position + width / 2.0 * width_direction + height / 2.0 * height_direction;
-        Rectangle {
+        Arc::new(Rectangle {
             position,
             normal: normal.normalize(),
             width_direction: width_direction.normalize(),
@@ -445,9 +445,9 @@ impl Rectangle {
             height,
             material,
             bounding_box: BoundingBox { bln, trf },
-        }
+        })
     }
-    pub fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
         Rectangle::new(
             Point3::new(0.0, 0.0, 0.0),
             Vector3::new(0.0, 1.0, 0.0),
@@ -510,18 +510,18 @@ pub struct Cube {
 }
 
 impl Cube {
-    fn new(width: f32, height: f32, depth: f32, material: Arc<Material>) -> Self {
+    fn new(width: f32, height: f32, depth: f32, material: Arc<Material>) -> Arc<dyn Primitive> {
         let trf = Point3::new(width / 2.0, height / 2.0, depth / 2.0);
         let bln = Point3::new(-width / 2.0, -height / 2.0, -depth / 2.0);
-        Cube {
+        Arc::new(Cube {
             width,
             height,
             depth,
             material,
             bounding_box: BoundingBox { bln, trf },
-        }
+        })
     }
-    pub fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
         Cube::new(2.0, 2.0, 2.0, material)
     }
 }
@@ -599,23 +599,28 @@ struct Triangle {
 }
 
 impl Triangle {
-    fn new(u: Point3<f32>, v: Point3<f32>, w: Point3<f32>, material: Arc<Material>) -> Self {
+    fn new(
+        u: Point3<f32>,
+        v: Point3<f32>,
+        w: Point3<f32>,
+        material: Arc<Material>,
+    ) -> Arc<dyn Primitive> {
         let uv = v - u;
         let uw = w - u;
         let normal = uv.cross(&uw).normalize();
         let bln = u.inf(&v).inf(&w);
         let trf = u.sup(&v).sup(&w);
         let bounding_box = BoundingBox { bln, trf };
-        Triangle {
+        Arc::new(Triangle {
             u,
             v,
             w,
             normal,
             material,
             bounding_box,
-        }
+        })
     }
-    pub fn unit(material: Arc<Material>) -> Self {
+    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
         let u = Point3::new(-1.0, 0.0, -1.0);
         let v = Point3::new(0.0, 0.0, 1.0);
         let w = Point3::new(1.0, 0.0, -1.0);
@@ -675,24 +680,24 @@ impl Primitive for Triangle {
 
 // MESH -----------------------------------------------------------------
 struct Mesh {
-    triangles: Vec<Triangle>,
+    triangles: Vec<Arc<Triangle>>,
     material: Arc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Mesh {
-    fn new(triangles: Vec<Triangle>, material: Arc<Material>) -> Self {
+    fn new(triangles: Vec<Arc<Triangle>>, material: Arc<Material>) -> Arc<dyn Primitive> {
         // Calculate the bounding box for the entire mesh based on the bounding boxes of individual triangles
         let bounding_box = Mesh::compute_bounding_box(&triangles);
 
-        Mesh {
+        Arc::new(Mesh {
             triangles,
             material,
             bounding_box,
-        }
+        })
     }
 
-    fn compute_bounding_box(triangles: &Vec<Triangle>) -> BoundingBox {
+    fn compute_bounding_box(triangles: &Vec<Arc<Triangle>>) -> BoundingBox {
         let mut bln = Point3::new(INFINITY, INFINITY, INFINITY);
         let mut trf = -bln;
         for triangle in triangles {
@@ -707,8 +712,8 @@ impl Mesh {
         BoundingBox { bln, trf }
     }
 
-    fn from_file(filename: &str, material: Arc<Material>) -> Self {
-        let mut triangles: Vec<Triangle> = Vec::new();
+    fn from_file(filename: &str, material: Arc<Material>) -> Arc<dyn Primitive> {
+        let mut triangles: Vec<Arc<dyn Primitive>> = Vec::new();
         let mut vertices: Vec<Point3<f32>> = Vec::new();
 
         let file = File::open(filename).expect("Failed to open file");
