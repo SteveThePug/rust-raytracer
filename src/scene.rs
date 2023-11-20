@@ -108,7 +108,8 @@ impl Scene {
         engine
             .register_type::<Scene>()
             .register_fn("Scene", Scene::empty)
-            .register_fn("addNode", Scene::add_node);
+            .register_fn("addNode", Scene::add_node)
+            .register_fn("addLight", Scene::add_light);
 
         engine
             .register_type::<Node>()

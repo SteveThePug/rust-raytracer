@@ -22,6 +22,7 @@ use nalgebra::Vector3;
 
 fn main() {
     env_logger::init();
+
     env::set_var("RUST_BACKTRACE", "1");
     run();
 }

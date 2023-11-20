@@ -43,18 +43,14 @@ pub fn run() {
     //Display Surface
     let pixels = {
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(
-            window_size.width as u32,
-            window_size.height as u32,
-            surface_texture,
-        )
-        .unwrap()
+        Pixels::new(1, 1, surface_texture).unwrap()
     };
     //Gui
     let gui = Gui::new(&window, &pixels);
 
     //State
     let mut state = State::new(window, pixels, gui);
+    state.clear();
 
     event_loop.run(move |event, _, control_flow| {
         // Draw the current frame
@@ -91,6 +87,9 @@ pub struct State {
     rays: Vec<Ray>,
 
     window: Window,
+    buffer_width: u32,
+    buffer_height: u32,
+
     pixels: Arc<Mutex<Pixels>>,
     gui: Gui,
     index: usize,
@@ -120,13 +119,13 @@ impl State {
             scene,
             rays,
             window,
+            buffer_width: (window_size.width as f32 * gui.buffer_proportion) as u32,
+            buffer_height: (window_size.height as f32 * gui.buffer_proportion) as u32,
             pixels: Arc::new(Mutex::new(pixels)),
             gui,
             index: 0,
         }
     }
-
-    /// Create a new `World` instance that can draw a moving box.
 
     fn update(&mut self) -> Result<(), Box<dyn Error>> {
         let gui_event = self.gui.event.take();
@@ -135,20 +134,19 @@ impl State {
                 GuiEvent::BufferResize | GuiEvent::CameraRelocate => {
                     let pixels = &self.pixels;
                     let size = self.window.inner_size();
-                    let width_new = (size.width as f32 * self.gui.buffer_proportion) as u32;
-                    let height_new = (size.height as f32 * self.gui.buffer_proportion) as u32;
+                    self.buffer_width = (size.width as f32 * self.gui.buffer_proportion) as u32;
+                    self.buffer_height = (size.height as f32 * self.gui.buffer_proportion) as u32;
                     self.clear();
                     let mut pixels = self.pixels.lock().unwrap();
                     pixels
-                        .resize_buffer(width_new, height_new)
+                        .resize_buffer(self.buffer_width, self.buffer_height)
                         .expect("Resize Error");
-                    self.scene.camera.set_position(self.gui.camera_eye);
-                    self.rays = self.scene.camera.cast_rays(width_new, height_new);
                 }
                 GuiEvent::SceneLoad(filename) => {
+                    println!("Reading {}", filename);
                     match self.update_scene_from_file(&filename) {
                         Err(e) => {
-                            println!()
+                            println!("{}", e)
                         }
                         Ok(()) => {
                             println!("Loaded file: {filename}")
@@ -156,7 +154,6 @@ impl State {
                     }
 
                     self.clear();
-                    println!("Reading {}", filename);
                 }
             },
             None => {}
@@ -170,11 +167,10 @@ impl State {
         println!("RESIZING!");
         let gui = &self.gui;
         let mut pixels = self.pixels.lock().unwrap();
-        if let Err(err) = pixels.resize_surface(size.width, size.height) {
-            log_error("pixels.resize_surface", err);
-            return Ok(());
+        match pixels.resize_surface(size.width, size.height) {
+            Err(e) => Err(Box::new(e)),
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn keyboard_input(&mut self, key: &KeyboardInput) {
@@ -191,7 +187,7 @@ impl State {
     /// Draw the `World` state to the frame buffer.
     ///
     /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
-    fn draw(&mut self) {
+    fn draw(&mut self) -> Result<(), Box<dyn Error>> {
         for i in 0..self.gui.ray_num {
             let i = self.index as usize;
             let ray_num = self.gui.ray_num;
@@ -210,6 +206,7 @@ impl State {
             frame[i * 4..(i + 1) * 4].copy_from_slice(&rgba);
             self.index = (self.index + 1) % (frame.len() / 4);
         }
+        Ok(())
     }
 
     fn clear(&mut self) {
@@ -220,11 +217,16 @@ impl State {
             let rgba = [0x00, 0x00, 0x00, 0xff];
             pixel.copy_from_slice(&rgba);
         }
+        self.scene.camera.set_position(self.gui.camera_eye);
+        self.rays = self
+            .scene
+            .camera
+            .cast_rays(self.buffer_width, self.buffer_height);
     }
 
     fn render(&mut self) -> Result<(), Box<dyn Error>> {
         self.update()?; //Update state
-        self.draw(); //Draw to pixels
+        self.draw()?; //Draw to pixels
         let pixels = self.pixels.lock().unwrap();
         self.gui
             .prepare(&self.window)

@@ -2,23 +2,23 @@ use nalgebra::{Point3, Vector3};
 
 #[derive(Clone)]
 pub struct Light {
-    pub colour: Vector3<f32>,
     pub position: Point3<f32>,
-    pub falloff: [f32; 3],
+    pub colour: Vector3<f32>,
+    pub falloff: Vector3<f32>,
 }
 
 impl Light {
-    pub fn new(colour: Vector3<f32>, position: Point3<f32>, falloff: [f32; 3]) -> Self {
+    pub fn new(position: Point3<f32>, colour: Vector3<f32>, falloff: Vector3<f32>) -> Self {
         Light {
-            colour,
             position,
+            colour,
             falloff,
         }
     }
     pub fn white() -> Self {
         let colour = Vector3::new(1.0, 1.0, 1.0);
         let position = Point3::new(0.0, 0.0, 0.0);
-        let falloff = [1.0, 0.0, 0.0];
-        Light::new(colour, position, falloff)
+        let falloff = Vector3::new(1.0, 0.0, 0.0);
+        Light::new(position, colour, falloff)
     }
 }

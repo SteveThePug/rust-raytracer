@@ -2,9 +2,9 @@ use nalgebra::Point3;
 use pixels::{wgpu, PixelsContext};
 use std::time::Instant;
 
-const BUFFER_PROPORTION_INIT: f32 = 0.8;
+const BUFFER_PROPORTION_INIT: f32 = 1.0;
 const BUFFER_PROPORTION_MIN: f32 = 0.5;
-const BUFFER_PROPORTION_MAX: f32 = 0.9;
+const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
 const RAYS_INIT: i32 = 9000;
 const RAYS_MIN: i32 = 100;
