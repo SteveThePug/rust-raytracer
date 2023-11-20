@@ -15,26 +15,30 @@ const CAMERA_MAX: f32 = 10.0;
 const CAMERA_INIT: f32 = 5.0;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`.
-pub(crate) struct Gui {
+pub enum GuiEvent {
+    BufferResize,
+    CameraRelocate,
+    SceneLoad(String),
+}
+
+pub struct Gui {
     imgui: imgui::Context,
     platform: imgui_winit_support::WinitPlatform,
     renderer: imgui_wgpu::Renderer,
     last_frame: Instant,
     last_cursor: Option<imgui::MouseCursor>,
-    about_open: bool,
 
+    pub event: Option<GuiEvent>,
+
+    pub filename: String,
     pub ray_num: i32,
-
     pub buffer_proportion: f32,
-    pub buffer_resize: bool,
-
     pub camera_eye: Point3<f32>,
-    pub camera_reposition: bool,
 }
 
 impl Gui {
     /// Create Dear ImGui.
-    pub(crate) fn new(window: &winit::window::Window, pixels: &pixels::Pixels) -> Self {
+    pub fn new(window: &winit::window::Window, pixels: &pixels::Pixels) -> Self {
         // Create Dear ImGui context
         let mut imgui = imgui::Context::create();
         imgui.set_ini_filename(None);
@@ -78,17 +82,16 @@ impl Gui {
             renderer,
             last_frame: Instant::now(),
             last_cursor: None,
-            about_open: true,
+            event: None,
+            filename: String::new(),
             ray_num: RAYS_INIT,
             buffer_proportion: BUFFER_PROPORTION_INIT,
-            buffer_resize: false,
             camera_eye: Point3::new(CAMERA_INIT, CAMERA_INIT, CAMERA_INIT),
-            camera_reposition: false,
         }
     }
 
-    /// Prepare Dear ImGui.
-    pub(crate) fn prepare(
+    /// Prepare Dear ImGuBi.
+    pub fn prepare(
         &mut self,
         window: &winit::window::Window,
     ) -> Result<(), winit::error::ExternalError> {
@@ -100,7 +103,7 @@ impl Gui {
     }
 
     /// Render Dear ImGui.
-    pub(crate) fn render(
+    pub fn render(
         &mut self,
         window: &winit::window::Window,
         encoder: &mut wgpu::CommandEncoder,
@@ -131,25 +134,27 @@ impl Gui {
             BUFFER_PROPORTION_MAX,
             &mut self.buffer_proportion,
         );
-        let mut buffer_resize = false;
         if ui.button("Change Buffer") {
-            buffer_resize = true
+            self.event = Some(GuiEvent::BufferResize);
         };
-        self.buffer_resize = buffer_resize;
 
-        let mut camera_reposition = false;
         ui.text("Vector3 Input:");
         // Create three input fields for x, y, and z components
         ui.slider("X", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[0]);
         ui.slider("Y", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[1]);
         ui.slider("Z", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[2]);
         // Check if any component of the Vector3 has changed
-        if ui.button("Apply") {
+        if ui.button("Apply Camera") {
             println!("Camera changed: {:?}", self.camera_eye);
             self.camera_eye = Point3::from(self.camera_eye);
-            camera_reposition = true;
+            self.event = Some(GuiEvent::CameraRelocate);
         }
-        self.camera_reposition = camera_reposition;
+
+        //Load file from
+        ui.input_text("Scene file", &mut self.filename).build();
+        if ui.button("Apply File") {
+            self.event = Some(GuiEvent::SceneLoad(self.filename.clone()));
+        }
 
         // Render Dear ImGui with WGPU
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -174,7 +179,7 @@ impl Gui {
     }
 
     /// Handle any outstanding events.
-    pub(crate) fn handle_event(
+    pub fn handle_event(
         &mut self,
         window: &winit::window::Window,
         event: &winit::event::Event<()>,

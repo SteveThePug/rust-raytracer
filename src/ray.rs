@@ -1,6 +1,9 @@
-use crate::{EPSILON, EPSILON_VECTOR};
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
 
-use nalgebra::{Matrix4, Point3, Unit, Vector3};
+use crate::EPSILON;
+use nalgebra::{Point3, Unit, Vector3};
 
 pub struct Ray {
     pub a: Point3<f32>,

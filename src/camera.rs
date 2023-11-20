@@ -1,16 +1,9 @@
 use crate::ray::Ray;
 use crate::{EPSILON, INFINITY};
-use log::error;
 use nalgebra::{Matrix4, Perspective3, Point3, Unit, Vector3};
-use std::env;
 
-#[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::new(
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 0.5, 0.5,
-    0.0, 0.0, 0.0, 1.0,
-);
+const ZNEAR: f32 = EPSILON;
+const ZFAR: f32 = INFINITY;
 
 #[derive(Clone)]
 pub struct Camera {
@@ -19,8 +12,6 @@ pub struct Camera {
     up: Vector3<f32>,
     fovy: f32,
     aspect: f32,
-    znear: f32,
-    zfar: f32,
     matrix: Matrix4<f32>,
     inverse: Matrix4<f32>,
 }
@@ -33,20 +24,15 @@ impl Camera {
         fovy: f32,
         aspect: f32,
     ) -> Self {
-        let znear = EPSILON;
-        let zfar = INFINITY;
-        let (matrix, inverse) =
-            Camera::build_matrix_and_inverse(&eye, &target, &up, aspect, fovy, znear, zfar);
+        let (matrix, inverse) = Camera::build_matrix_and_inverse(&eye, &target, &up, fovy, aspect);
         Camera {
             eye,
             target,
             up,
             fovy,
-            aspect,
-            znear,
-            zfar,
             matrix,
             inverse,
+            aspect,
         }
     }
 
@@ -54,13 +40,11 @@ impl Camera {
         eye: &Point3<f32>,
         target: &Point3<f32>,
         up: &Vector3<f32>,
-        aspect: f32,
         fovy: f32,
-        znear: f32,
-        zfar: f32,
+        aspect: f32,
     ) -> (Matrix4<f32>, Matrix4<f32>) {
         let view = Matrix4::look_at_lh(eye, target, up);
-        let proj = Perspective3::new(aspect, fovy, znear, zfar);
+        let proj = Perspective3::new(aspect, fovy, ZNEAR, ZFAR);
         let matrix = proj.as_matrix() * view;
         let inverse = view.try_inverse().expect("No view") * proj.inverse();
         (matrix, inverse)
@@ -103,8 +87,6 @@ impl Camera {
         let fovy_radians = (self.fovy as f64).to_radians();
         let fovh_radians = 2.0 * ((fovy_radians / 2.0).tan() * aspect).atan();
         let view_direction = (self.target - self.eye).normalize(); // Normalize the view direction vector
-        let dx = 2.0 / width as f32;
-        let dy = 2.0 / height as f32;
         let hor = view_direction.cross(&self.up).normalize(); // pointing right
         let vert = view_direction.cross(&hor).normalize(); // pointing up
         let h_width = 2.0 * (fovh_radians / 2.0).tan();

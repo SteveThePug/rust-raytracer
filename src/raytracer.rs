@@ -1,17 +1,8 @@
-use crate::{
-    light::Light,
-    primitive::{Intersection, Primitive},
-    ray::Ray,
-    scene::*,
-    INFINITY,
-};
-use std::collections::HashMap;
-use std::sync::Arc;
+use crate::{light::Light, primitive::Intersection, ray::Ray, scene::*, INFINITY};
 
-use nalgebra::{distance, Matrix4, Point3, Unit, Vector3, Vector4};
+use nalgebra::{Unit, Vector3};
 
 static ZERO_VECTOR: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
-static ONE_VECTOR: Vector3<f32> = Vector3::new(1.0, 1.0, 1.0);
 
 pub fn shade_rays(scene: &Scene, rays: &Vec<Ray>, width: i32, height: i32) -> Vec<Vector3<u8>> {
     let mut pixel_data = vec![Vector3::new(0, 0, 0); (width * height) as usize];

@@ -1,10 +1,14 @@
-use crate::camera::Camera;
+#![allow(dead_code)]
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+
 use crate::light::Light;
 use crate::primitive::Primitive;
 use crate::primitive::*;
+use crate::state::State;
+use crate::{camera::Camera, state};
 use nalgebra::{Matrix4, Point3, Vector3};
 use rhai::{Engine, EvalAltResult};
-use std::collections::HashMap;
 use std::sync::Arc;
 
 const LIGHT_AMBIENT: f32 = 0.2;
@@ -91,7 +95,8 @@ impl Scene {
     fn get_ambient(&self) -> Arc<Vector3<f32>> {
         Arc::new(self.ambient_light)
     }
-    pub fn init(filename: &str) -> Result<(), Box<EvalAltResult>> {
+
+    pub fn from_script(filename: &str) -> Result<Scene, Box<EvalAltResult>> {
         let mut engine = Engine::new();
 
         engine
@@ -104,6 +109,7 @@ impl Scene {
             .register_type::<Scene>()
             .register_fn("Scene", Scene::empty)
             .register_fn("addNode", Scene::add_node);
+
         engine
             .register_type::<Node>()
             .register_fn("Node", Node::new)
@@ -118,12 +124,34 @@ impl Scene {
             .register_fn("Light", Light::new);
         engine
             .register_type::<Material>()
-            .register_fn("Material", Material::new);
+            .register_fn("Material", Material::new)
+            .register_fn("MaterialRed", Material::red)
+            .register_fn("MaterialBlue", Material::blue)
+            .register_fn("MaterialGreen", Material::green)
+            .register_fn("MaterialMagenta", Material::magenta)
+            .register_fn("MaterialTurquoise", Material::turquoise);
         engine
             .register_type::<Sphere>()
-            .register_fn("Sphere", Sphere::new);
+            .register_fn("Sphere", Sphere::new)
+            .register_fn("SphereUnit", Sphere::unit);
+        engine
+            .register_type::<Cube>()
+            .register_fn("Cube", Cube::new)
+            .register_fn("CubeUnit", Cube::unit);
+        engine
+            .register_type::<Cone>()
+            .register_fn("Cone", Cone::new)
+            .register_fn("ConeUnit", Cone::unit);
+        engine
+            .register_type::<Sphere>()
+            .register_fn("Sphere", Sphere::new)
+            .register_fn("SphereUnit", Sphere::unit);
+        engine
+            .register_type::<Sphere>()
+            .register_fn("Sphere", Sphere::new)
+            .register_fn("SphereUnit", Sphere::unit);
 
-        engine.run_file(filename.into())?;
-        Ok(())
+        let scene: Scene = engine.eval_file(filename.into())?;
+        Ok(scene)
     }
 }

@@ -1,10 +1,10 @@
+#[warn(dead_code)]
 use crate::ray::Ray;
 use crate::{EPSILON, EPSILON_VECTOR, INFINITY};
-use nalgebra::{distance, Matrix4, Point3, Unit, Vector3};
+use nalgebra::{distance, Point3, Unit, Vector3};
 use roots::{find_roots_quadratic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::path::Path;
 use std::sync::Arc;
 
 // MATERIAL -----------------------------------------------------------------
@@ -510,7 +510,7 @@ pub struct Cube {
 }
 
 impl Cube {
-    fn new(width: f32, height: f32, depth: f32, material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(width: f32, height: f32, depth: f32, material: Arc<Material>) -> Arc<dyn Primitive> {
         let trf = Point3::new(width / 2.0, height / 2.0, depth / 2.0);
         let bln = Point3::new(-width / 2.0, -height / 2.0, -depth / 2.0);
         Arc::new(Cube {
