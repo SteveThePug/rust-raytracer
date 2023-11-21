@@ -1,12 +1,6 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-
+use crate::camera::Camera;
 use crate::light::Light;
-use crate::primitive::Primitive;
 use crate::primitive::*;
-use crate::state::State;
-use crate::{camera::Camera, state};
 use nalgebra::{Matrix4, Point3, Vector3};
 use rhai::{Engine, EvalAltResult};
 use std::sync::Arc;
@@ -144,13 +138,16 @@ impl Scene {
             .register_fn("Cone", Cone::new)
             .register_fn("ConeUnit", Cone::unit);
         engine
-            .register_type::<Sphere>()
-            .register_fn("Sphere", Sphere::new)
-            .register_fn("SphereUnit", Sphere::unit);
+            .register_type::<Cylinder>()
+            .register_fn("Cylinder", Cylinder::new);
         engine
-            .register_type::<Sphere>()
-            .register_fn("Sphere", Sphere::new)
-            .register_fn("SphereUnit", Sphere::unit);
+            .register_type::<Circle>()
+            .register_fn("Circle", Circle::new)
+            .register_fn("CircleUnit", Circle::unit);
+        engine
+            .register_type::<Rectangle>()
+            .register_fn("Rectangle", Rectangle::new)
+            .register_fn("RectangleUnit", Rectangle::unit);
 
         let scene: Scene = engine.eval_file(filename.into())?;
         Ok(scene)

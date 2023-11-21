@@ -1,4 +1,3 @@
-#[warn(dead_code)]
 use crate::ray::Ray;
 use crate::{EPSILON, EPSILON_VECTOR, INFINITY};
 use nalgebra::{distance, Point3, Unit, Vector3};
@@ -255,28 +254,130 @@ impl Primitive for Circle {
 }
 
 // CYLINDER -----------------------------------------------------------------
-struct Cylinder {
+#[derive(Clone)]
+pub struct Cylinder {
     radius: f32,
     base: f32,
-    height: f32,
-    base_circle: Circle,
-    height_circle: Circle,
+    top: f32,
+    base_circle: Arc<dyn Primitive>,
+    top_circle: Arc<dyn Primitive>,
     material: Arc<Material>,
+    bounding_box: BoundingBox,
 }
 
-impl Cylinder {}
+impl Cylinder {
+    pub fn new(radius: f32, base: f32, top: f32, material: Arc<Material>) -> Arc<dyn Primitive> {
+        let base_circle = Circle::new(
+            Point3::new(0.0, base, 0.0),
+            radius,
+            Vector3::new(0.0, -1.0, 0.0),
+            Arc::clone(&material),
+        );
+        let top_circle = Circle::new(
+            Point3::new(0.0, top, 0.0),
+            radius,
+            Vector3::new(0.0, 1.0, 0.0),
+            Arc::clone(&material),
+        );
+        let bln = Point3::new(-radius, base, -radius);
+        let trf = Point3::new(radius, top, radius);
+        Arc::new(Cylinder {
+            radius,
+            base,
+            top,
+            base_circle,
+            top_circle,
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
 
 impl Primitive for Cylinder {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        todo!()
-    }
+        let point = &ray.a;
+        let dir = &ray.b;
+        let (ax, ay, az) = (point.x, point.y, point.z);
+        let (bx, by, bz) = (dir.x, dir.y, dir.z);
+        let a = bx * bx + bz * bz;
+        let b = 2.0 * ax * bx + 2.0 * az * bz;
+        let c = ax * ax + az * az - self.radius * self.radius;
 
+        let t = match find_roots_quadratic(a, b, c) {
+            Roots::No(_) => return None,
+            Roots::One([x1]) => Some(x1),
+            Roots::Two([x1, x2]) => {
+                if x1 <= 0.0 && x2 <= 0.0 {
+                    return None;
+                } else {
+                    if x1.abs() < x2.abs() {
+                        Some(x1)
+                    } else {
+                        Some(x2)
+                    }
+                }
+            }
+            _ => return None,
+        };
+
+        let cylinder_intersect = match t {
+            None => None,
+            Some(t) => {
+                let intersect = ray.at_t(t);
+                if intersect.y >= self.base && intersect.y <= self.top {
+                    let normal = Vector3::new(2.0 * intersect.x, 0.0, 2.0 * intersect.z);
+                    Some(Intersection {
+                        point: intersect,
+                        normal: Unit::new_normalize(normal),
+                        material: Arc::clone(&self.material),
+                        incidence: ray.b,
+                        distance: t,
+                    })
+                } else {
+                    None
+                }
+            }
+        };
+        let base_intersect = self.base_circle.intersect_ray(ray);
+        let top_intersect = self.top_circle.intersect_ray(ray);
+        match (cylinder_intersect, base_intersect, top_intersect) {
+            (None, None, None) => None,
+            (Some(intersect), None, None) => Some(intersect),
+            (None, Some(intersect), None) => Some(intersect),
+            (None, None, Some(intersect)) => Some(intersect),
+            (Some(intersect), Some(intersect_base), None) => {
+                let cylinder_distance = distance(&ray.a, &intersect.point);
+                let base_distance = distance(&ray.a, &intersect_base.point);
+                match cylinder_distance < base_distance {
+                    true => Some(intersect),
+                    false => Some(intersect_base),
+                }
+            }
+            (Some(intersect), None, Some(intersect_top)) => {
+                let cylinder_distance = distance(&ray.a, &intersect.point);
+                let top_distance = distance(&ray.a, &intersect_top.point);
+                match cylinder_distance < top_distance {
+                    true => Some(intersect),
+                    false => Some(intersect_top),
+                }
+            }
+            (None, Some(intersect_base), Some(intersect_top)) => {
+                let base_distance = distance(&ray.a, &intersect_base.point);
+                let top_distance = distance(&ray.a, &intersect_top.point);
+                match base_distance < top_distance {
+                    true => Some(intersect_base),
+                    false => Some(intersect_top),
+                }
+            }
+            _ => None,
+        }
+    }
     fn get_material(&self) -> Arc<Material> {
-        todo!()
+        Arc::clone(&self.material)
     }
 
     fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
-        todo!()
+        self.bounding_box.intersect_bounding_box(ray)
     }
 }
 
@@ -396,7 +497,8 @@ impl Primitive for Cone {
 }
 
 // RECTANGLE -----------------------------------------------------------------
-struct Rectangle {
+#[derive(Clone)]
+pub struct Rectangle {
     position: Point3<f32>,
     normal: Vector3<f32>,
     width_direction: Vector3<f32>,
@@ -407,7 +509,7 @@ struct Rectangle {
 }
 
 impl Rectangle {
-    fn new(
+    pub fn new(
         position: Point3<f32>,
         normal: Vector3<f32>,
         width_direction: Vector3<f32>,

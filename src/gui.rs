@@ -2,6 +2,8 @@ use nalgebra::Point3;
 use pixels::{wgpu, PixelsContext};
 use std::time::Instant;
 
+const INIT_FILE: &str = "test.rhai";
+
 const BUFFER_PROPORTION_INIT: f32 = 1.0;
 const BUFFER_PROPORTION_MIN: f32 = 0.5;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
@@ -83,7 +85,7 @@ impl Gui {
             last_frame: Instant::now(),
             last_cursor: None,
             event: None,
-            filename: String::new(),
+            filename: String::from(INIT_FILE),
             ray_num: RAYS_INIT,
             buffer_proportion: BUFFER_PROPORTION_INIT,
             camera_eye: Point3::new(CAMERA_INIT, CAMERA_INIT, CAMERA_INIT),
