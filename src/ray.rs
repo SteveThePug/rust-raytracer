@@ -1,7 +1,3 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-
 use crate::EPSILON;
 use nalgebra::{Point3, Unit, Vector3};
 
