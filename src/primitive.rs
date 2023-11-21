@@ -58,23 +58,6 @@ pub struct Intersection {
     pub material: Arc<Material>,
     pub distance: f32,
 }
-impl Intersection {
-    pub fn new(
-        point: Point3<f32>,
-        normal: Unit<Vector3<f32>>,
-        incidence: Unit<Vector3<f32>>,
-        material: Arc<Material>,
-        t: f32,
-    ) -> Self {
-        Intersection {
-            point,
-            normal,
-            incidence,
-            material,
-            distance: t,
-        }
-    }
-}
 // BOUNDING BOX -----------------------------------------------------------------
 #[derive(Clone)]
 struct BoundingBox {
