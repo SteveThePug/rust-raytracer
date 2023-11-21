@@ -1,6 +1,6 @@
 //Use linear algebra module
 
-use crate::raytracer;
+use crate::raytracer::*;
 use crate::{gui::Gui, ray::Ray, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 
@@ -8,7 +8,7 @@ use std::error::Error;
 
 use std::sync::{Arc, Mutex};
 
-use pixels::{Pixels, SurfaceTexture};
+use pixels::{Pixels, SurfaceTexture, TextureError};
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -139,11 +139,9 @@ impl State {
         self.clear();
     }
 
-    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
+    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), TextureError> {
         let mut pixels = self.pixels.lock().unwrap();
-        pixels
-            .resize_surface(size.width, size.height)
-            .map_err(Box::new)
+        pixels.resize_surface(size.width, size.height)
     }
 
     fn keyboard_input(&mut self, key: &KeyboardInput) {
