@@ -1,26 +1,18 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
 //Use linear algebra module
 
-use crate::{camera::Camera, gui::Gui, light::Light, ray::Ray, scene::Scene};
+use crate::raytracer;
+use crate::{gui::Gui, ray::Ray, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
-use crate::{primitive::*, raytracer};
 
 use std::error::Error;
 
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-use std::{env, thread, thread::JoinHandle};
 
-use error_iter::ErrorIter as _;
-use nalgebra::{Point3, Vector3};
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
-use winit_input_helper::WinitInputHelper;
 
 const START_WIDTH: i32 = 800;
 const START_HEIGHT: i32 = 800;
