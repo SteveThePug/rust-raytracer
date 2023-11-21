@@ -21,67 +21,59 @@ const COLOUR_CLEAR: [u8; 4] = [0x22, 0x22, 0x11, 0xff];
 
 pub fn run() {
     let event_loop = EventLoop::new();
-    // Window
-    let window = {
-        let size = LogicalSize::new(START_WIDTH, START_HEIGHT);
-        WindowBuilder::new()
-            .with_title("Hello Pixels + Dear ImGui")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
-    let window_size = window.inner_size();
-    //Display Surface
-    let pixels = {
-        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(1, 1, surface_texture).unwrap()
-    };
-    //Gui
+    let window = create_window(&event_loop);
+    let pixels = create_pixels(&window);
     let gui = Gui::new(&window, &pixels);
 
-    //State
     let mut state = State::new(window, pixels, gui);
     state.clear();
 
     event_loop.run(move |event, _, control_flow| {
-        // Draw the current frame
-        state.gui.handle_event(&state.window, &event); //Let gui handle its events
+        state.gui.handle_event(&state.window, &event);
         state.update().expect("Could not update");
+
         match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit;
-                }
-                WindowEvent::Resized(size) => {
-                    state.resize(&size).expect("Could not resize");
-                }
-                WindowEvent::KeyboardInput { input, .. } => {
-                    state.keyboard_input(&input);
-                }
-                WindowEvent::MouseInput { button, .. } => {
-                    state.mouse_input(&button);
-                }
-                _ => {}
-            },
-            Event::RedrawRequested(_) => {
-                state.render().expect("Failed to render");
+            Event::WindowEvent { event, .. } => {
+                handle_window_event(event, control_flow, &mut state)
             }
-            _ => {
-                state.window.request_redraw();
-            }
+            Event::RedrawRequested(_) => state.render().expect("Failed to render"),
+            _ => state.window.request_redraw(),
         }
     });
+}
+
+fn create_window(event_loop: &EventLoop<()>) -> Window {
+    let size = LogicalSize::new(START_WIDTH, START_HEIGHT);
+    WindowBuilder::new()
+        .with_title("Hello Pixels + Dear ImGui")
+        .with_inner_size(size)
+        .with_min_inner_size(size)
+        .build(event_loop)
+        .unwrap()
+}
+
+fn create_pixels(window: &Window) -> Pixels {
+    let window_size = window.inner_size();
+    let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
+    Pixels::new(1, 1, surface_texture).unwrap()
+}
+
+fn handle_window_event(event: WindowEvent, control_flow: &mut ControlFlow, state: &mut State) {
+    match event {
+        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+        WindowEvent::Resized(size) => state.resize(&size).expect("Could not resize"),
+        WindowEvent::KeyboardInput { input, .. } => state.keyboard_input(&input),
+        WindowEvent::MouseInput { button, .. } => state.mouse_input(&button),
+        _ => {}
+    }
 }
 
 pub struct State {
     scene: Scene,
     rays: Vec<Ray>,
-
     window: Window,
     buffer_width: u32,
     buffer_height: u32,
-
     pixels: Arc<Mutex<Pixels>>,
     gui: Gui,
     index: usize,
@@ -99,8 +91,6 @@ impl State {
     }
 
     pub fn new(window: Window, pixels: Pixels, gui: Gui) -> Self {
-        // Event Loop
-        //Initalise empty scene for rendering
         let scene = Scene::empty();
         let window_size = window.inner_size();
         let rays = scene
@@ -120,79 +110,57 @@ impl State {
     }
 
     fn update(&mut self) -> Result<(), Box<dyn Error>> {
-        let gui_event = self.gui.event.take();
-        match gui_event {
-            Some(event) => match event {
-                GuiEvent::BufferResize | GuiEvent::CameraRelocate => {
-                    let pixels = &self.pixels;
-                    let size = self.window.inner_size();
-                    self.buffer_width = (size.width as f32 * self.gui.buffer_proportion) as u32;
-                    self.buffer_height = (size.height as f32 * self.gui.buffer_proportion) as u32;
-                    self.clear();
-                    let mut pixels = self.pixels.lock().unwrap();
-                    pixels
-                        .resize_buffer(self.buffer_width, self.buffer_height)
-                        .expect("Resize Error");
-                }
-                GuiEvent::SceneLoad(filename) => {
-                    println!("Reading {}", filename);
-                    match self.update_scene_from_file(&filename) {
-                        Err(e) => {
-                            println!("{}", e)
-                        }
-                        Ok(()) => {
-                            println!("Loaded file: {filename}")
-                        }
-                    }
-
-                    self.clear();
-                }
-            },
-            None => {}
+        if let Some(event) = self.gui.event.take() {
+            match event {
+                GuiEvent::BufferResize | GuiEvent::CameraRelocate => self.resize_buffer(),
+                GuiEvent::SceneLoad(filename) => self.load_scene(&filename),
+            }
         }
-        self.gui.event = None;
         Ok(())
     }
 
-    /// Resize the world
-    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
-        println!("RESIZING!");
-        let gui = &self.gui;
+    fn resize_buffer(&mut self) {
+        let size = self.window.inner_size();
+        self.buffer_width = (size.width as f32 * self.gui.buffer_proportion) as u32;
+        self.buffer_height = (size.height as f32 * self.gui.buffer_proportion) as u32;
+        self.clear();
         let mut pixels = self.pixels.lock().unwrap();
-        match pixels.resize_surface(size.width, size.height) {
-            Err(e) => Err(Box::new(e)),
-            _ => Ok(()),
+        pixels
+            .resize_buffer(self.buffer_width, self.buffer_height)
+            .expect("Resize Error");
+    }
+
+    fn load_scene(&mut self, filename: &String) {
+        println!("Reading {}", filename);
+        match self.update_scene_from_file(filename) {
+            Err(e) => println!("{}", e),
+            Ok(()) => println!("Loaded file: {filename}"),
         }
+        self.clear();
+    }
+
+    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
+        let mut pixels = self.pixels.lock().unwrap();
+        pixels
+            .resize_surface(size.width, size.height)
+            .map_err(Box::new)
     }
 
     fn keyboard_input(&mut self, key: &KeyboardInput) {
-        match key.virtual_keycode {
-            Some(key) => match key {
-                VirtualKeyCode::A => {}
-                _ => {}
-            },
-            None => {}
+        if let Some(VirtualKeyCode::A) = key.virtual_keycode {
+            // Handle 'A' key event here
         }
     }
-    fn mouse_input(&mut self, button: &MouseButton) {}
 
-    /// Draw the `World` state to the frame buffer.
-    ///
-    /// Assumes the default texture format: `wgpu::TextureFormat::Rgba8UnormSrgb`
+    fn mouse_input(&mut self, _button: &MouseButton) {
+        // Handle mouse input here
+    }
+
     fn draw(&mut self) -> Result<(), Box<dyn Error>> {
-        for i in 0..self.gui.ray_num {
+        for _ in 0..self.gui.ray_num {
             let i = self.index as usize;
-            let ray_num = self.gui.ray_num;
-            let pixels = self.pixels.clone();
-            let colour = {
-                let ray = &self.rays[i];
-                raytracer::shade_ray(&self.scene, &ray)
-            };
-
-            let rgba = match colour {
-                Some(colour) => [colour.x, colour.y, colour.z, 255],
-                None => COLOUR_CLEAR,
-            };
+            let colour = self.rays[i].shade_ray(&self.scene);
+            let rgba = colour.map_or(COLOUR_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
             let mut pixels = self.pixels.lock().unwrap();
             let frame = pixels.frame_mut();
             frame[i * 4..(i + 1) * 4].copy_from_slice(&rgba);
@@ -205,9 +173,8 @@ impl State {
         self.index = 0;
         let mut pixels = self.pixels.lock().unwrap();
         let frame = pixels.frame_mut();
-        for (i, pixel) in frame.chunks_exact_mut(4).enumerate() {
-            let rgba = [0x00, 0x00, 0x00, 0xff];
-            pixel.copy_from_slice(&rgba);
+        for pixel in frame.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&[0x00, 0x00, 0x00, 0xff]);
         }
         self.scene.camera.set_position(self.gui.camera_eye);
         self.rays = self
@@ -231,7 +198,6 @@ impl State {
         });
         if let Err(err) = render_result {
             log_error("pixels.render", err);
-            return Ok(());
         }
         Ok(())
     }
