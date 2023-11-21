@@ -1,6 +1,5 @@
 //Use linear algebra module
 
-use crate::raytracer::*;
 use crate::{gui::Gui, ray::Ray, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 
@@ -8,7 +7,8 @@ use std::error::Error;
 
 use std::sync::{Arc, Mutex};
 
-use pixels::{Pixels, SurfaceTexture, TextureError};
+use anyhow::Result;
+use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::{LogicalSize, PhysicalSize};
 use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -16,27 +16,38 @@ use winit::window::{Window, WindowBuilder};
 
 const START_WIDTH: i32 = 800;
 const START_HEIGHT: i32 = 800;
-const BOX_SIZE: i16 = 64;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x22, 0x11, 0xff];
 
-pub fn run() {
+const INIT_FILE: &str = "test.rhai";
+
+pub fn run() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new();
     let window = create_window(&event_loop);
     let pixels = create_pixels(&window);
     let gui = Gui::new(&window, &pixels);
 
     let mut state = State::new(window, pixels, gui);
-    state.clear();
+    state.load_scene(&String::from(INIT_FILE));
+    state.resize_buffer()?;
 
     event_loop.run(move |event, _, control_flow| {
         state.gui.handle_event(&state.window, &event);
-        state.update().expect("Could not update");
+
+        if let Err(_e) = state.update() {
+            *control_flow = ControlFlow::Exit;
+        }
 
         match event {
             Event::WindowEvent { event, .. } => {
-                handle_window_event(event, control_flow, &mut state)
+                if let Err(_e) = handle_window_event(event, control_flow, &mut state) {
+                    *control_flow = ControlFlow::Exit;
+                }
             }
-            Event::RedrawRequested(_) => state.render().expect("Failed to render"),
+            Event::RedrawRequested(_) => {
+                if let Err(_e) = state.render() {
+                    *control_flow = ControlFlow::Exit;
+                }
+            }
             _ => state.window.request_redraw(),
         }
     });
@@ -58,14 +69,19 @@ fn create_pixels(window: &Window) -> Pixels {
     Pixels::new(1, 1, surface_texture).unwrap()
 }
 
-fn handle_window_event(event: WindowEvent, control_flow: &mut ControlFlow, state: &mut State) {
+fn handle_window_event(
+    event: WindowEvent,
+    control_flow: &mut ControlFlow,
+    state: &mut State,
+) -> Result<(), Box<dyn Error>> {
     match event {
         WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-        WindowEvent::Resized(size) => state.resize(&size).expect("Could not resize"),
+        WindowEvent::Resized(size) => state.resize(&size)?,
         WindowEvent::KeyboardInput { input, .. } => state.keyboard_input(&input),
         WindowEvent::MouseInput { button, .. } => state.mouse_input(&button),
         _ => {}
-    }
+    };
+    Ok(())
 }
 
 pub struct State {
@@ -112,36 +128,38 @@ impl State {
     fn update(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(event) = self.gui.event.take() {
             match event {
-                GuiEvent::BufferResize | GuiEvent::CameraRelocate => self.resize_buffer(),
+                GuiEvent::BufferResize | GuiEvent::CameraRelocate => self.resize_buffer()?,
                 GuiEvent::SceneLoad(filename) => self.load_scene(&filename),
             }
-        }
+        };
         Ok(())
     }
 
-    fn resize_buffer(&mut self) {
+    fn resize_buffer(&mut self) -> Result<(), Box<dyn Error>> {
         let size = self.window.inner_size();
         self.buffer_width = (size.width as f32 * self.gui.buffer_proportion) as u32;
         self.buffer_height = (size.height as f32 * self.gui.buffer_proportion) as u32;
-        self.clear();
+        self.clear()?;
         let mut pixels = self.pixels.lock().unwrap();
-        pixels
-            .resize_buffer(self.buffer_width, self.buffer_height)
-            .expect("Resize Error");
+        pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
+        Ok(())
     }
 
     fn load_scene(&mut self, filename: &String) {
         println!("Reading {}", filename);
         match self.update_scene_from_file(filename) {
             Err(e) => println!("{}", e),
-            Ok(()) => println!("Loaded file: {filename}"),
+            Ok(()) => {
+                println!("Loaded file: {filename}");
+                self.render().expect("Could not draw new file");
+            }
         }
-        self.clear();
     }
 
-    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), TextureError> {
+    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
         let mut pixels = self.pixels.lock().unwrap();
-        pixels.resize_surface(size.width, size.height)
+        pixels.resize_surface(size.width, size.height)?;
+        Ok(())
     }
 
     fn keyboard_input(&mut self, key: &KeyboardInput) {
@@ -167,7 +185,7 @@ impl State {
         Ok(())
     }
 
-    fn clear(&mut self) {
+    fn clear(&mut self) -> Result<(), Box<dyn Error>> {
         self.index = 0;
         let mut pixels = self.pixels.lock().unwrap();
         let frame = pixels.frame_mut();
@@ -179,6 +197,7 @@ impl State {
             .scene
             .camera
             .cast_rays(self.buffer_width, self.buffer_height);
+        Ok(())
     }
 
     fn render(&mut self) -> Result<(), Box<dyn Error>> {
@@ -188,15 +207,14 @@ impl State {
         self.gui
             .prepare(&self.window)
             .expect("gui.prepare() failed"); //Prepare imgui
-        let render_result = pixels.render_with(|encoder, render_target, context| {
+        if let Err(e) = pixels.render_with(|encoder, render_target, context| {
             context.scaling_renderer.render(encoder, render_target); // Render pixels
             self.gui
                 .render(&self.window, encoder, render_target, context)?;
             Ok(())
-        });
-        if let Err(err) = render_result {
-            log_error("pixels.render", err);
-        }
+        }) {
+            log_error("pixels.render", e);
+        };
         Ok(())
     }
 }

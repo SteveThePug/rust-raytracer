@@ -24,7 +24,9 @@ fn main() {
     env_logger::init();
 
     env::set_var("RUST_BACKTRACE", "1");
-    run();
+    if let Err(e) = run() {
+        println!("Error at runtime: {}", e);
+    };
 }
 
 fn log_error<E: Error + 'static>(method_name: &str, err: E) {
