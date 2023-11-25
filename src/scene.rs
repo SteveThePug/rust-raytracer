@@ -87,7 +87,7 @@ impl Scene {
             .register_fn("scale", Node::scale);
         engine
             .register_type::<Camera>()
-            .register_fn("Camera", Camera::new);
+            .register_fn("Camera", Camera::new_sizeless);
         engine
             .register_type::<Light>()
             .register_fn("Light", Light::new);
@@ -128,6 +128,15 @@ impl Scene {
         engine
             .register_type::<Torus>()
             .register_fn("Torus", Torus::new);
+        engine
+            .register_type::<AdamShape>()
+            .register_fn("Adam", AdamShape::new);
+        engine
+            .register_type::<AdamShape2>()
+            .register_fn("Adam2", AdamShape2::new);
+        engine
+            .register_type::<AdamShape3>()
+            .register_fn("Adam3", AdamShape3::new);
 
         let scene: Scene = engine.eval(script.into())?;
         Ok(scene)

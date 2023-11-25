@@ -1,7 +1,8 @@
+#[allow(dead_code)]
 use crate::ray::Ray;
 use crate::{EPSILON, EPSILON_VECTOR, INFINITY};
 use nalgebra::{distance, Point3, Unit, Vector3};
-use roots::{find_roots_quadratic, find_roots_quartic, Roots};
+use roots::{find_roots_cubic, find_roots_quadratic, find_roots_quartic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
@@ -297,8 +298,8 @@ impl Primitive for Cylinder {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         let point = &ray.a;
         let dir = &ray.b;
-        let (ax, ay, az) = (point.x, point.y, point.z);
-        let (bx, by, bz) = (dir.x, dir.y, dir.z);
+        let (ax, _ay, az) = (point.x, point.y, point.z);
+        let (bx, _by, bz) = (dir.x, dir.y, dir.z);
         let a = bx * bx + bz * bz;
         let b = 2.0 * ax * bx + 2.0 * az * bz;
         let c = ax * ax + az * az - self.radius * self.radius;
@@ -978,7 +979,7 @@ impl Primitive for SteinerSurface {
 
 fn smallest_non_zero(arr: &[f32]) -> Option<f32> {
     for &num in arr {
-        if num > 0.0 {
+        if num >= 0.0 {
             return Some(num);
         }
     }
@@ -1108,6 +1109,239 @@ impl Primitive for Torus {
         })
     }
 
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Arc<Material> {
+        Arc::clone(&self.material)
+    }
+}
+
+#[derive(Clone)]
+pub struct AdamShape {
+    material: Arc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl AdamShape {
+    pub fn new(material: Arc<Material>) -> Arc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Arc::new(AdamShape {
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for AdamShape {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+
+        let t0 = a.powf(3.0) + a * c * e + a * c;
+        let t1 = 3.0 * a.powf(2.0) * b + b * c * e + a * d * e + a * c * f + b * c + a * d;
+        let t2 = 3.0 * a * b.powf(2.0) + b * d * e + b * c * f + a * d * f + b * d;
+        let t3 = b.powf(3.0) + b * d * f;
+
+        let t = match find_roots_cubic(t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        };
+
+        let t = match t {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = 3.0 * x.powf(2.0) + y * z + y;
+        let dy = x * z + x;
+        let dz = x * y;
+        let normal = Unit::new_normalize(Vector3::new(dx, dy, dz));
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Arc::clone(&self.material),
+            distance: t,
+        })
+    }
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Arc<Material> {
+        Arc::clone(&self.material)
+    }
+}
+#[derive(Clone)]
+pub struct AdamShape2 {
+    material: Arc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl AdamShape2 {
+    pub fn new(material: Arc<Material>) -> Arc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Arc::new(AdamShape2 {
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for AdamShape2 {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+
+        let t0 = a.powf(2.0) * c + a * c * e + a * c + c * e;
+        let t1 = 2.0 * a * b * c
+            + a.powf(2.0) * d
+            + b * c * e
+            + a * d * e
+            + a * c * f
+            + b * c
+            + a * d
+            + d * e
+            + c * f;
+        let t2 =
+            b.powf(2.0) * c + 2.0 * a * b * d + b * d * e + b * c * f + a * d * f + b * d + d * f;
+        let t3 = b.powf(2.0) * d + b * d * f;
+
+        let t = match find_roots_cubic(t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        };
+
+        let t = match t {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = 2.0 * x * y + y * z + y.powf(2.0);
+        let dy = x.powf(2.0) + x * z + x + z;
+        let dz = x * y + y;
+        let normal = Unit::new_normalize(Vector3::new(dx, dy, dz));
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Arc::clone(&self.material),
+            distance: t,
+        })
+    }
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Arc<Material> {
+        Arc::clone(&self.material)
+    }
+}
+
+#[derive(Clone)]
+pub struct AdamShape3 {
+    material: Arc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl AdamShape3 {
+    pub fn new(material: Arc<Material>) -> Arc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Arc::new(AdamShape3 {
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for AdamShape3 {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+
+        let t0 = a * c * e.powf(2.0) + a * c * e + a * e + c * e;
+        let t1 = b * c * e.powf(2.0)
+            + a * d * e.powf(2.0)
+            + 2.0 * a * c * e * f
+            + b * c * e
+            + a * d * e
+            + a * c * f
+            + b * e
+            + d * e
+            + a * f
+            + c * f;
+        let t2 = b * d * e.powf(2.0)
+            + 2.0 * b * c * e * f
+            + 2.0 * a * d * e * f
+            + a * c * f.powf(2.0)
+            + b * d * e
+            + b * c * f
+            + a * d * f
+            + b * f
+            + d * f;
+        let t3 = 2.0 * b * d * e * f + b * c * f.powf(2.0) + a * d * f.powf(2.0) + b * d * f;
+        let t4 = b * d * f.powf(2.0);
+
+        let t = match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        };
+
+        let t = match t {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = y * z.powf(2.0) + y * z + z;
+        let dy = x * z.powf(2.0) + x * z + z;
+        let dz = 2.0 * x * y * z + x * y + x + y;
+        let normal = Unit::new_normalize(Vector3::new(dx, dy, dz));
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Arc::clone(&self.material),
+            distance: t,
+        })
+    }
     fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
     }
