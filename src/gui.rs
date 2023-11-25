@@ -2,7 +2,7 @@ use nalgebra::Point3;
 use pixels::{wgpu, PixelsContext};
 use std::time::Instant;
 
-const INIT_FILE: &str = "test.rhai";
+const INIT_FILE: &str = "scene.rhai";
 
 const BUFFER_PROPORTION_INIT: f32 = 1.0;
 const BUFFER_PROPORTION_MIN: f32 = 0.5;
@@ -16,7 +16,7 @@ const CAMERA_MIN: f32 = -10.0;
 const CAMERA_MAX: f32 = 10.0;
 const CAMERA_INIT: f32 = 5.0;
 
-/// Manages all state required for rendering Dear ImGui over `Pixels`.
+/// Manages all state required for rendering Dear ImGui over `Pixels`test.
 pub enum GuiEvent {
     BufferResize,
     CameraRelocate,

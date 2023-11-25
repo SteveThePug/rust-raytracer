@@ -16,7 +16,7 @@ use winit::window::{Window, WindowBuilder};
 
 const START_WIDTH: i32 = 800;
 const START_HEIGHT: i32 = 800;
-const COLOUR_CLEAR: [u8; 4] = [0x22, 0x22, 0x11, 0xff];
+const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
 
 const INIT_FILE: &str = "test.rhai";
 

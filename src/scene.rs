@@ -148,6 +148,12 @@ impl Scene {
             .register_type::<Rectangle>()
             .register_fn("Rectangle", Rectangle::new)
             .register_fn("RectangleUnit", Rectangle::unit);
+        engine
+            .register_type::<SteinerSurface>()
+            .register_fn("Steiner", SteinerSurface::new);
+        engine
+            .register_type::<Torus>()
+            .register_fn("Torus", Torus::new);
 
         let scene: Scene = engine.eval_file(filename.into())?;
         Ok(scene)
