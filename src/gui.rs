@@ -1,4 +1,4 @@
-use crate::{camera::Camera, state::INIT_FILE, UP_VECTOR, ZERO_VECTOR};
+use crate::{camera::Camera, scene::Scene, state::INIT_FILE, UP_VECTOR, ZERO_VECTOR};
 use imgui::*;
 use nalgebra::{Point3, Vector3};
 use pixels::{wgpu, PixelsContext};
@@ -20,7 +20,7 @@ const CAMERA_INIT: f32 = 5.0;
 pub enum GuiEvent {
     BufferResize(f32),
     CameraUpdate(Camera),
-    SceneLoad(String),
+    SceneLoad(Scene),
 }
 
 pub struct Gui {
@@ -34,6 +34,8 @@ pub struct Gui {
 
     script_filename: String,
     script: String,
+    scene: Scene,
+
     pub ray_num: i32,
 
     buffer_proportion: f32,
@@ -61,7 +63,7 @@ impl Gui {
 
         // Configure Dear ImGui fonts
         let hidpi_factor = window.scale_factor();
-        let font_size = (13.0 * hidpi_factor) as f32;
+        let font_size = (11.0 * hidpi_factor) as f32;
         imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
         imgui
             .fonts()
@@ -91,8 +93,11 @@ impl Gui {
             last_frame: Instant::now(),
             last_cursor: None,
             event: None,
+
             script_filename: String::from(INIT_FILE),
             script: String::new(),
+            scene: Scene::empty(),
+
             ray_num: RAYS_INIT,
             buffer_proportion: BUFFER_PROPORTION_INIT,
 
@@ -183,10 +188,22 @@ impl Gui {
             ui.input_text("Scene file", &mut self.script_filename)
                 .build();
             if ui.button("Import from File") {
-                self.event = Some(GuiEvent::SceneLoad(self.script_filename.clone()));
+                match std::fs::read_to_string(&self.script_filename) {
+                    Ok(script) => self.script = script,
+                    Err(e) => println!("{e}"),
+                }
+            }
+            if ui.button("Apply script") {
+                match Scene::from_rhai(&self.script) {
+                    Ok(scene) => {
+                        self.scene = scene;
+                        self.event = Some(GuiEvent::SceneLoad(self.scene.clone()));
+                    }
+                    Err(e) => println!("{e}"),
+                }
             }
             //Script block
-            ui.input_text_multiline("script", &mut self.script, [300., 100.])
+            ui.input_text_multiline("script", &mut self.script, [500., 900.])
                 .build();
         }
 
