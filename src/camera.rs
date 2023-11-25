@@ -44,6 +44,15 @@ impl Camera {
         }
     }
 
+    pub fn new_sizeless(
+        eye: Point3<f32>,
+        target: Point3<f32>,
+        up: Vector3<f32>,
+        fovy: f32,
+    ) -> Self {
+        Camera::new(eye, target, up, 1, 1, fovy)
+    }
+
     pub fn unit() -> Self {
         let eye = Point3::new(0.0, 0.0, 1.0);
         let target = Point3::new(0.0, 0.0, 0.0);
