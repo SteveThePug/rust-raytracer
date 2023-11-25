@@ -1,4 +1,4 @@
-use crate::{camera::Camera, scene::Scene, state::INIT_FILE, UP_VECTOR, ZERO_VECTOR};
+use crate::{camera::Camera, scene::Scene, state::INIT_FILE, UP_VECTOR_F32, ZERO_VECTOR_F32};
 use imgui::*;
 use nalgebra::{Point3, Vector3};
 use pixels::{wgpu, PixelsContext};
@@ -102,8 +102,8 @@ impl Gui {
             buffer_proportion: BUFFER_PROPORTION_INIT,
 
             camera_eye: [CAMERA_INIT, CAMERA_INIT, CAMERA_INIT],
-            camera_target: ZERO_VECTOR.into(),
-            camera_up: UP_VECTOR.into(),
+            camera_target: ZERO_VECTOR_F32.into(),
+            camera_up: UP_VECTOR_F32.into(),
             camera_fov: 110.0,
         }
     }
@@ -171,13 +171,18 @@ impl Gui {
             // Create three input fields for x, y, and z components
             if ui.button("Apply Camera") {
                 println!("Camera changed: {:?}", self.camera_eye);
+                let (eye, target, up) = (&self.camera_eye, &self.camera_target, &self.camera_up);
+                let (ex, ey, ez) = (eye[0] as f64, eye[1] as f64, eye[2] as f64);
+                let (tx, ty, tz) = (target[0] as f64, target[1] as f64, target[2] as f64);
+                let (ux, uy, uz) = (up[0] as f64, up[1] as f64, up[2] as f64);
+
                 let camera = Camera::new(
-                    Point3::from_slice(&self.camera_eye),
-                    Point3::from_slice(&self.camera_target),
-                    Vector3::from_row_slice(&self.camera_up),
+                    Point3::new(ex, ey, ez),
+                    Point3::new(tx, ty, tz),
+                    Vector3::new(ux, uy, uz),
                     1,
                     1,
-                    self.camera_fov,
+                    self.camera_fov as f64,
                 );
                 self.event = Some(GuiEvent::CameraUpdate(camera));
             }

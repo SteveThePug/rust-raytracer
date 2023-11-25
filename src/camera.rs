@@ -2,32 +2,32 @@ use crate::ray::Ray;
 use crate::{EPSILON, INFINITY};
 use nalgebra::{Matrix4, Perspective3, Point3, Unit, Vector3};
 
-const ZNEAR: f32 = EPSILON;
-const ZFAR: f32 = INFINITY;
+const ZNEAR: f64 = EPSILON;
+const ZFAR: f64 = INFINITY;
 
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct Camera {
-    eye: Point3<f32>,
-    target: Point3<f32>,
-    up: Vector3<f32>,
-    fovy: f32,
+    eye: Point3<f64>,
+    target: Point3<f64>,
+    up: Vector3<f64>,
+    fovy: f64,
     width: u32,
     height: u32,
-    matrix: Matrix4<f32>,
-    inverse: Matrix4<f32>,
+    matrix: Matrix4<f64>,
+    inverse: Matrix4<f64>,
     pub rays: Vec<Ray>,
 }
 
 #[allow(dead_code)]
 impl Camera {
     pub fn new(
-        eye: Point3<f32>,
-        target: Point3<f32>,
-        up: Vector3<f32>,
+        eye: Point3<f64>,
+        target: Point3<f64>,
+        up: Vector3<f64>,
         width: u32,
         height: u32,
-        fovy: f32,
+        fovy: f64,
     ) -> Self {
         let (matrix, inverse) = build_matrix_and_inverse(&eye, &target, &up, width, height, fovy);
         let rays = cast_rays(&eye, &target, &up, width, height, fovy);
@@ -45,10 +45,10 @@ impl Camera {
     }
 
     pub fn new_sizeless(
-        eye: Point3<f32>,
-        target: Point3<f32>,
-        up: Vector3<f32>,
-        fovy: f32,
+        eye: Point3<f64>,
+        target: Point3<f64>,
+        up: Vector3<f64>,
+        fovy: f64,
     ) -> Self {
         Camera::new(eye, target, up, 1, 1, fovy)
     }
@@ -71,7 +71,7 @@ impl Camera {
         )
     }
 
-    pub fn build_matrix_and_inverse(&self) -> (Matrix4<f32>, Matrix4<f32>) {
+    pub fn build_matrix_and_inverse(&self) -> (Matrix4<f64>, Matrix4<f64>) {
         build_matrix_and_inverse(
             &self.eye,
             &self.target,
@@ -92,21 +92,21 @@ impl Camera {
         let h_width = 2.0 * (fovh_radians / 2.0).tan();
         let v_height = 2.0 * (fovy_radians / 2.0).tan();
         //All good
-        let d_hor_vec = hor * (h_width / self.width as f64) as f32;
-        let d_vert_vec = vert * (v_height / self.height as f64) as f32;
+        let d_hor_vec = hor * (h_width / self.width as f64) as f64;
+        let d_vert_vec = vert * (v_height / self.height as f64) as f64;
 
         let half_w = self.width as i32 / 2;
         let half_h = self.height as i32 / 2;
 
-        let horizontal = (x as i32 - half_w) as f32 * (d_hor_vec);
-        let vertical = (-(y as i32) + half_h) as f32 * (d_vert_vec);
+        let horizontal = (x as i32 - half_w) as f64 * (d_hor_vec);
+        let vertical = (-(y as i32) + half_h) as f64 * (d_vert_vec);
 
         let direction = view_direction + horizontal + vertical;
 
         Ray::new(self.eye, Unit::new_normalize(direction))
     }
 
-    pub fn set_position(&mut self, eye: Point3<f32>) {
+    pub fn set_position(&mut self, eye: Point3<f64>) {
         self.eye = eye;
     }
 
@@ -119,15 +119,15 @@ impl Camera {
 }
 
 fn build_matrix_and_inverse(
-    eye: &Point3<f32>,
-    target: &Point3<f32>,
-    up: &Vector3<f32>,
+    eye: &Point3<f64>,
+    target: &Point3<f64>,
+    up: &Vector3<f64>,
     width: u32,
     height: u32,
-    fovy: f32,
-) -> (Matrix4<f32>, Matrix4<f32>) {
+    fovy: f64,
+) -> (Matrix4<f64>, Matrix4<f64>) {
     let view = Matrix4::look_at_lh(eye, target, up);
-    let aspect = width as f32 / height as f32;
+    let aspect = width as f64 / height as f64;
     let proj = Perspective3::new(aspect, fovy, ZNEAR, ZFAR);
     let matrix = proj.as_matrix() * view;
     let inverse = view.try_inverse().expect("No view") * proj.inverse();
@@ -135,12 +135,12 @@ fn build_matrix_and_inverse(
 }
 
 fn cast_rays(
-    eye: &Point3<f32>,
-    target: &Point3<f32>,
-    up: &Vector3<f32>,
+    eye: &Point3<f64>,
+    target: &Point3<f64>,
+    up: &Vector3<f64>,
     width: u32,
     height: u32,
-    fovy: f32,
+    fovy: f64,
 ) -> Vec<Ray> {
     let aspect = width as f64 / height as f64;
     let fovy_radians = (fovy as f64).to_radians();
@@ -148,11 +148,11 @@ fn cast_rays(
     let view_direction = (target - eye).normalize();
     let hor = (view_direction.cross(&up)).normalize();
     let vert = (view_direction.cross(&hor)).normalize();
-    let h_width = 2.0 * (fovh_radians / 2.0).tan() as f32;
-    let v_height = 2.0 * (fovy_radians / 2.0).tan() as f32;
+    let h_width = 2.0 * (fovh_radians / 2.0).tan() as f64;
+    let v_height = 2.0 * (fovy_radians / 2.0).tan() as f64;
     //All good
-    let d_hor_vec = hor * (h_width / width as f32);
-    let d_vert_vec = vert * (v_height / height as f32);
+    let d_hor_vec = hor * (h_width / width as f64);
+    let d_vert_vec = vert * (v_height / height as f64);
 
     let mut rays = Vec::with_capacity(width as usize * height as usize);
 
@@ -161,8 +161,8 @@ fn cast_rays(
 
     for j in 0..height as i32 {
         for i in 0..width as i32 {
-            let horizontal = (i - half_w) as f32 * (d_hor_vec);
-            let vertical = (-j + half_h) as f32 * (d_vert_vec);
+            let horizontal = (i - half_w) as f64 * (d_hor_vec);
+            let vertical = (-j + half_h) as f64 * (d_vert_vec);
 
             let direction = view_direction + horizontal + vertical;
             let ray = Ray::new(eye.clone(), Unit::new_normalize(direction));

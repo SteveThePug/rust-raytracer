@@ -4,6 +4,9 @@ use crate::camera::Camera;
 use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
 use std::error::Error;
 
 use std::sync::{Arc, Mutex};
@@ -20,6 +23,146 @@ const START_HEIGHT: i32 = 1000;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
 
 pub const INIT_FILE: &str = "scene.rhai";
+
+pub struct State {
+    scene: Scene,
+    camera: Camera,
+    window: Window,
+
+    buffer_width: u32,
+    buffer_height: u32,
+
+    pixels: Arc<Mutex<Pixels>>,
+    gui: Gui,
+
+    ray_queue: Vec<usize>,
+}
+
+impl State {
+    pub fn new(window: Window, pixels: Pixels, gui: Gui) -> Self {
+        let scene = Scene::empty();
+        let window_size = window.inner_size();
+        let camera = Camera::unit();
+
+        Self {
+            scene,
+            camera,
+            window,
+            buffer_width: window_size.width as u32,
+            buffer_height: window_size.height as u32,
+            pixels: Arc::new(Mutex::new(pixels)),
+            gui,
+            ray_queue: Vec::new(),
+        }
+    }
+
+    fn update(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(event) = self.gui.event.take() {
+            match event {
+                GuiEvent::BufferResize(proportion) => self.resize_buffer(proportion)?,
+                GuiEvent::CameraUpdate(camera) => self.set_camera(camera)?,
+                GuiEvent::SceneLoad(scene) => {
+                    self.scene = scene;
+                    self.clear()?;
+                }
+            }
+        };
+        Ok(())
+    }
+
+    fn resize_buffer(&mut self, proportion: f32) -> Result<(), Box<dyn Error>> {
+        let size = self.window.inner_size();
+
+        self.buffer_width = (size.width as f32 * proportion) as u32;
+        self.buffer_height = (size.height as f32 * proportion) as u32;
+        self.camera.set_size(self.buffer_width, self.buffer_height);
+
+        self.clear()?;
+
+        let mut pixels = self.pixels.lock().unwrap();
+        pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
+        Ok(())
+    }
+
+    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
+        let mut pixels = self.pixels.lock().unwrap();
+        pixels.resize_surface(size.width, size.height)?;
+        Ok(())
+    }
+
+    fn keyboard_input(&mut self, key: &KeyboardInput) {
+        if let Some(VirtualKeyCode::A) = key.virtual_keycode {
+            // Handle 'A' key event here
+        }
+    }
+
+    fn mouse_input(&mut self, _button: &MouseButton) {
+        // Handle mouse input here
+    }
+
+    fn draw(&mut self) -> Result<(), Box<dyn Error>> {
+        for _ in 0..self.gui.ray_num {
+            //Get random index from queue
+            let index = self.ray_queue.pop().unwrap();
+            //Shade colour for selected ray
+            let colour = &self.camera.rays[index].shade_ray(&self.scene);
+            //Assign colour to frame
+            let rgba = colour.map_or(COLOUR_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
+            let mut pixels = self.pixels.lock().unwrap();
+            let frame = pixels.frame_mut();
+            frame[index * 4..(index + 1) * 4].copy_from_slice(&rgba);
+
+            if self.ray_queue.is_empty() {
+                break;
+            };
+        }
+        Ok(())
+    }
+
+    fn clear(&mut self) -> Result<(), Box<dyn Error>> {
+        let mut pixels = self.pixels.lock().unwrap();
+        let frame = pixels.frame_mut();
+        for pixel in frame.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&[0x00, 0x00, 0x00, 0xff]);
+        }
+        Ok(())
+    }
+
+    fn set_camera(&mut self, camera: Camera) -> Result<(), Box<dyn Error>> {
+        self.clear()?;
+        self.reset_queue();
+        self.camera = camera;
+        self.camera.set_size(self.buffer_width, self.buffer_height);
+        Ok(())
+    }
+
+    fn reset_queue(&mut self) {
+        let size = self.buffer_height as usize * self.buffer_width as usize;
+        let mut ray_queue: Vec<usize> = (0..size).collect();
+        ray_queue.shuffle(&mut thread_rng());
+        self.ray_queue = ray_queue;
+    }
+
+    fn render(&mut self) -> Result<(), Box<dyn Error>> {
+        self.update()?; //Update state
+        if !self.ray_queue.is_empty() {
+            self.draw()?;
+        }
+        let pixels = self.pixels.lock().unwrap();
+        self.gui
+            .prepare(&self.window)
+            .expect("gui.prepare() failed"); //Prepare imgui
+        if let Err(e) = pixels.render_with(|encoder, render_target, context| {
+            context.scaling_renderer.render(encoder, render_target); // Render pixels
+            self.gui
+                .render(&self.window, encoder, render_target, context)?;
+            Ok(())
+        }) {
+            log_error("pixels.render", e);
+        };
+        Ok(())
+    }
+}
 
 pub fn run() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new();
@@ -82,139 +225,4 @@ fn handle_window_event(
         _ => {}
     };
     Ok(())
-}
-
-pub struct State {
-    scene: Scene,
-    camera: Camera,
-    window: Window,
-
-    buffer_width: u32,
-    buffer_height: u32,
-
-    pixels: Arc<Mutex<Pixels>>,
-    gui: Gui,
-
-    index: usize,
-    finished: bool,
-}
-
-impl State {
-    pub fn new(window: Window, pixels: Pixels, gui: Gui) -> Self {
-        let scene = Scene::empty();
-        let window_size = window.inner_size();
-        let camera = Camera::unit();
-
-        Self {
-            scene,
-            camera,
-            window,
-            buffer_width: window_size.width as u32,
-            buffer_height: window_size.height as u32,
-            pixels: Arc::new(Mutex::new(pixels)),
-            gui,
-            index: 0,
-            finished: false,
-        }
-    }
-
-    fn update(&mut self) -> Result<(), Box<dyn Error>> {
-        if let Some(event) = self.gui.event.take() {
-            match event {
-                GuiEvent::BufferResize(proportion) => self.resize_buffer(proportion)?,
-                GuiEvent::CameraUpdate(camera) => self.set_camera(camera)?,
-                GuiEvent::SceneLoad(scene) => {
-                    self.scene = scene;
-                    self.clear()?;
-                }
-            }
-        };
-        Ok(())
-    }
-
-    fn resize_buffer(&mut self, proportion: f32) -> Result<(), Box<dyn Error>> {
-        let size = self.window.inner_size();
-
-        self.buffer_width = (size.width as f32 * proportion) as u32;
-        self.buffer_height = (size.height as f32 * proportion) as u32;
-        self.camera.set_size(self.buffer_width, self.buffer_height);
-
-        self.clear()?;
-
-        let mut pixels = self.pixels.lock().unwrap();
-        pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
-        Ok(())
-    }
-
-    fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
-        let mut pixels = self.pixels.lock().unwrap();
-        pixels.resize_surface(size.width, size.height)?;
-        Ok(())
-    }
-
-    fn keyboard_input(&mut self, key: &KeyboardInput) {
-        if let Some(VirtualKeyCode::A) = key.virtual_keycode {
-            // Handle 'A' key event here
-        }
-    }
-
-    fn mouse_input(&mut self, _button: &MouseButton) {
-        // Handle mouse input here
-    }
-
-    fn draw(&mut self) -> Result<(), Box<dyn Error>> {
-        for _ in 0..self.gui.ray_num {
-            let i = self.index as usize;
-            let camera = &self.camera;
-            let colour = camera.rays[i].shade_ray(&self.scene);
-            let rgba = colour.map_or(COLOUR_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
-            let mut pixels = self.pixels.lock().unwrap();
-            let frame = pixels.frame_mut();
-            frame[i * 4..(i + 1) * 4].copy_from_slice(&rgba);
-            self.index = self.index + 1;
-            if self.index >= frame.len() / 4 {
-                self.finished = true;
-                return Ok(());
-            };
-        }
-        Ok(())
-    }
-
-    fn clear(&mut self) -> Result<(), Box<dyn Error>> {
-        self.index = 0;
-        self.finished = false;
-        let mut pixels = self.pixels.lock().unwrap();
-        let frame = pixels.frame_mut();
-        for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0x00, 0x00, 0x00, 0xff]);
-        }
-        Ok(())
-    }
-
-    fn set_camera(&mut self, camera: Camera) -> Result<(), Box<dyn Error>> {
-        self.clear()?;
-        self.camera = camera;
-        self.camera.set_size(self.buffer_width, self.buffer_height);
-        Ok(())
-    }
-
-    fn render(&mut self) -> Result<(), Box<dyn Error>> {
-        self.update()?; //Update state
-        if !self.finished {
-            self.draw()?;
-        }; //Draw to pixels
-        let pixels = self.pixels.lock().unwrap();
-        self.gui
-            .prepare(&self.window)
-            .expect("gui.prepare() failed"); //Prepare imgui
-        if let Err(e) = pixels.render_with(|encoder, render_target, context| {
-            context.scaling_renderer.render(encoder, render_target); // Render pixels
-            self.gui
-                .render(&self.window, encoder, render_target, context)?;
-            Ok(())
-        }) {
-            log_error("pixels.render", e);
-        };
-        Ok(())
-    }
 }

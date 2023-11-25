@@ -8,12 +8,12 @@ use nalgebra::{Point3, Unit, Vector3};
 
 #[derive(Clone)]
 pub struct Ray {
-    pub a: Point3<f32>,
-    pub b: Unit<Vector3<f32>>,
+    pub a: Point3<f64>,
+    pub b: Unit<Vector3<f64>>,
 }
 
 impl Ray {
-    pub fn new(a: Point3<f32>, b: Unit<Vector3<f32>>) -> Ray {
+    pub fn new(a: Point3<f64>, b: Unit<Vector3<f64>>) -> Ray {
         Ray { a, b }
     }
     pub fn unit() -> Ray {
@@ -21,7 +21,7 @@ impl Ray {
         let b = Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0));
         Ray { a, b }
     }
-    pub fn at_t(&self, t: f32) -> Point3<f32> {
+    pub fn at_t(&self, t: f64) -> Point3<f64> {
         self.a + self.b.into_inner() * (t + EPSILON)
     }
     //Shade a single ray

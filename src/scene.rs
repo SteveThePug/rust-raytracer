@@ -68,11 +68,11 @@ impl Scene {
         let mut engine = Engine::new();
 
         engine
-            .register_type::<Vector3<f32>>()
-            .register_fn("V", Vector3::<f32>::new);
+            .register_type::<Vector3<f64>>()
+            .register_fn("V", Vector3::<f64>::new);
         engine
-            .register_type::<Point3<f32>>()
-            .register_fn("P", Point3::<f32>::new);
+            .register_type::<Point3<f64>>()
+            .register_fn("P", Point3::<f64>::new);
         engine
             .register_type::<Scene>()
             .register_fn("Scene", Scene::empty)
