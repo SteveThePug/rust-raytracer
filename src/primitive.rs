@@ -1,7 +1,7 @@
 use crate::ray::Ray;
 use crate::{EPSILON, EPSILON_VECTOR, INFINITY};
 use nalgebra::{distance, Point3, Unit, Vector3};
-use roots::{find_roots_quadratic, Roots};
+use roots::{find_roots_quadratic, find_roots_quartic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
@@ -874,5 +874,244 @@ impl Primitive for Mesh {
 
     fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
         self.bounding_box.intersect_bounding_box(ray)
+    }
+}
+
+#[derive(Clone)]
+pub struct SteinerSurface {
+    material: Arc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl SteinerSurface {
+    pub fn new(material: Arc<Material>) -> Arc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Arc::new(SteinerSurface {
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for SteinerSurface {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+
+        let t0 = a.powf(2.0) * c.powf(2.0)
+            + a.powf(2.0) * e.powf(2.0)
+            + c.powf(2.0) * e.powf(2.0)
+            + c * e.powf(2.0);
+        let t1 = 2.0 * a * b * c.powf(2.0)
+            + 2.0 * a.powf(2.0) * c * d
+            + 2.0 * a * b * e.powf(2.0)
+            + 2.0 * c * d * e.powf(2.0)
+            + 2.0 * a.powf(2.0) * e * f
+            + 2.0 * c.powf(2.0) * e * f
+            + d * e.powf(2.0)
+            + 2.0 * c * e * f.powf(2.0);
+        let t2 = b.powf(2.0) * c.powf(2.0)
+            + 4.0 * a * b * c * d
+            + a.powf(2.0) * d.powf(2.0)
+            + b.powf(2.0) * e.powf(2.0)
+            + d.powf(2.0) * e.powf(2.0)
+            + 4.0 * a * b * e * f
+            + 4.0 * c * d * e * f
+            + a.powf(2.0) * f.powf(2.0)
+            + c.powf(2.0) * f.powf(2.0)
+            + 2.0 * d * e * f
+            + c * f.powf(2.0);
+        let t3 = 2.0 * b.powf(2.0) * c * d
+            + 2.0 * a * b * d.powf(2.0)
+            + 2.0 * b.powf(2.0) * e * f
+            + 2.0 * d.powf(2.0) * e * f
+            + 2.0 * a * b * f.powf(2.0)
+            + 2.0 * c * d * f.powf(2.0)
+            + d.powf(2.0) * f.powf(2.0);
+        let t4 = b.powf(2.0) * d.powf(2.0) + b.powf(2.0) * f.powf(2.0) + d.powf(2.0) * f.powf(2.0);
+
+        let t = match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        };
+
+        let t = match t {
+            Some(t) => t,
+            None => return None,
+        };
+
+        //Now we have the smallest non-zero t
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let normal = Unit::new_normalize(Vector3::new(
+            2.0 * x * y * y + 2.0 * x * z * z + y * z,
+            2.0 * x * x * y + 2.0 * z * z * y + x * z,
+            2.0 * x * x * z + 2.0 * z * y * y + x * y,
+        ));
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Arc::clone(&self.material),
+            distance: t,
+        })
+    }
+
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Arc<Material> {
+        Arc::clone(&self.material)
+    }
+}
+
+fn smallest_non_zero(arr: &[f32]) -> Option<f32> {
+    for &num in arr {
+        if num > 0.0 {
+            return Some(num);
+        }
+    }
+    None
+}
+
+#[derive(Clone)]
+pub struct Torus {
+    inner_rad: f32,
+    outer_rad: f32,
+    material: Arc<Material>,
+    bounding_box: BoundingBox,
+}
+impl Torus {
+    pub fn new(inner_rad: f32, outer_rad: f32, material: Arc<Material>) -> Arc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Arc::new(Torus {
+            inner_rad,
+            outer_rad,
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+impl Primitive for Torus {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+        let r = self.inner_rad;
+        let R = self.outer_rad;
+        let t0 = R.powf(2.0).powf(2.0) - 2.0 * R.powf(2.0) * a.powf(2.0) + a.powf(2.0).powf(2.0)
+            - 2.0 * R.powf(2.0) * c.powf(2.0)
+            + 2.0 * a.powf(2.0) * c.powf(2.0)
+            + c.powf(2.0).powf(2.0)
+            + 2.0 * R.powf(2.0) * e.powf(2.0)
+            + 2.0 * a.powf(2.0) * e.powf(2.0)
+            + 2.0 * c.powf(2.0) * e.powf(2.0)
+            + e.powf(2.0).powf(2.0)
+            - 2.0 * R.powf(2.0) * r.powf(2.0)
+            - 2.0 * a.powf(2.0) * r.powf(2.0)
+            - 2.0 * c.powf(2.0) * r.powf(2.0)
+            - 2.0 * e.powf(2.0) * r.powf(2.0)
+            + r.powf(2.0).powf(2.0);
+        let t1 = -4.0 * R.powf(2.0) * a * b + 4.0 * a.powf(3.0) * b + 4.0 * a * b * c.powf(2.0)
+            - 4.0 * R.powf(2.0) * c * d
+            + 4.0 * a.powf(2.0) * c * d
+            + 4.0 * c.powf(3.0) * d
+            + 4.0 * a * b * e.powf(2.0)
+            + 4.0 * c * d * e.powf(2.0)
+            + 4.0 * R.powf(2.0) * e * f
+            + 4.0 * a.powf(2.0) * e * f
+            + 4.0 * c.powf(2.0) * e * f
+            + 4.0 * e.powf(3.0) * f
+            - 4.0 * a * b * r.powf(2.0)
+            - 4.0 * c * d * r.powf(2.0)
+            - 4.0 * e * f * r.powf(2.0);
+        let t2 = -2.0 * R.powf(2.0) * b.powf(2.0)
+            + 6.0 * a.powf(2.0) * b.powf(2.0)
+            + 2.0 * b.powf(2.0) * c.powf(2.0)
+            + 8.0 * a * b * c * d
+            - 2.0 * R.powf(2.0) * d.powf(2.0)
+            + 2.0 * a.powf(2.0) * d.powf(2.0)
+            + 6.0 * c.powf(2.0) * d.powf(2.0)
+            + 2.0 * b.powf(2.0) * e.powf(2.0)
+            + 2.0 * d.powf(2.0) * e.powf(2.0)
+            + 8.0 * a * b * e * f
+            + 8.0 * c * d * e * f
+            + 2.0 * R.powf(2.0) * f.powf(2.0)
+            + 2.0 * a.powf(2.0) * f.powf(2.0)
+            + 2.0 * c.powf(2.0) * f.powf(2.0)
+            + 6.0 * e.powf(2.0) * f.powf(2.0)
+            - 2.0 * b.powf(2.0) * r.powf(2.0)
+            - 2.0 * d.powf(2.0) * r.powf(2.0)
+            - 2.0 * f.powf(2.0) * r.powf(2.0);
+        let t3 = 4.0 * a * b.powf(3.0)
+            + 4.0 * b.powf(2.0) * c * d
+            + 4.0 * a * b * d.powf(2.0)
+            + 4.0 * c * d.powf(3.0)
+            + 4.0 * b.powf(2.0) * e * f
+            + 4.0 * d.powf(2.0) * e * f
+            + 4.0 * a * b * f.powf(2.0)
+            + 4.0 * c * d * f.powf(2.0)
+            + 4.0 * e * f.powf(3.0);
+        let t4 = b.powf(4.0)
+            + 2.0 * b.powf(2.0) * d.powf(2.0)
+            + d.powf(4.0)
+            + 2.0 * b.powf(2.0) * f.powf(2.0)
+            + 2.0 * d.powf(2.0) * f.powf(2.0)
+            + f.powf(4.0);
+
+        let t = match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        };
+
+        let t = match t {
+            Some(t) => t,
+            None => return None,
+        };
+
+        //Now we have the smallest non-zero t
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = 4.0 * (R.powf(2.0) - r.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * R
+            - 8.0 * (x.powf(2.0) + y.powf(2.0)) * R;
+        let dy = -4.0 * (R.powf(2.0) - r.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * r;
+        let dz = -8.0 * R.powf(2.0) * x
+            + 4.0 * (R.powf(2.0) - r.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * x;
+        let normal = Unit::new_normalize(Vector3::new(dx, dy, dz));
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Arc::clone(&self.material),
+            distance: t,
+        })
+    }
+
+    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f32>> {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Arc<Material> {
+        Arc::clone(&self.material)
     }
 }
