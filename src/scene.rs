@@ -4,9 +4,6 @@ use crate::primitive::*;
 use nalgebra::{Matrix4, Point3, Vector3};
 use rhai::{Engine, EvalAltResult};
 use std::sync::Arc;
-
-const LIGHT_AMBIENT: f32 = 0.2;
-
 #[derive(Clone)]
 pub struct Node {
     pub primitive: Arc<dyn Primitive>,
@@ -42,7 +39,6 @@ pub struct Scene {
     pub materials: Vec<Material>,
     pub lights: Vec<Light>,
     pub cameras: Vec<Camera>,
-    pub ambient_light: Vector3<f32>,
     pub camera: Camera,
 }
 
@@ -61,7 +57,6 @@ impl Scene {
                 120.0,
                 1.0,
             ),
-            ambient_light: Vector3::new(LIGHT_AMBIENT, LIGHT_AMBIENT, LIGHT_AMBIENT),
         }
     }
     fn add_node(&mut self, node: Node) {
@@ -76,18 +71,12 @@ impl Scene {
     fn add_camera(&mut self, camera: Camera) {
         self.cameras.push(camera);
     }
-    fn set_ambient(&mut self, intensity: Vector3<f32>) {
-        self.ambient_light = intensity;
-    }
     fn set_camera(&mut self, camera: Camera) {
         self.camera = camera;
     }
 
     fn get_camera(&self) -> &Camera {
         &self.camera
-    }
-    fn get_ambient(&self) -> Arc<Vector3<f32>> {
-        Arc::new(self.ambient_light)
     }
 
     pub fn from_script(filename: &str) -> Result<Scene, Box<EvalAltResult>> {
