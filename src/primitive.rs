@@ -1013,52 +1013,52 @@ impl Primitive for Torus {
         let d = ray.b.y;
         let e = ray.a.z;
         let f = ray.b.z;
-        let r = self.inner_rad;
-        let R = self.outer_rad;
-        let t0 = R.powf(2.0).powf(2.0) - 2.0 * R.powf(2.0) * a.powf(2.0) + a.powf(2.0).powf(2.0)
-            - 2.0 * R.powf(2.0) * c.powf(2.0)
+        let r1 = self.inner_rad;
+        let r2 = self.outer_rad;
+        let t0 = r2.powf(2.0).powf(2.0) - 2.0 * r2.powf(2.0) * a.powf(2.0) + a.powf(2.0).powf(2.0)
+            - 2.0 * r2.powf(2.0) * c.powf(2.0)
             + 2.0 * a.powf(2.0) * c.powf(2.0)
             + c.powf(2.0).powf(2.0)
-            + 2.0 * R.powf(2.0) * e.powf(2.0)
+            + 2.0 * r2.powf(2.0) * e.powf(2.0)
             + 2.0 * a.powf(2.0) * e.powf(2.0)
             + 2.0 * c.powf(2.0) * e.powf(2.0)
             + e.powf(2.0).powf(2.0)
-            - 2.0 * R.powf(2.0) * r.powf(2.0)
-            - 2.0 * a.powf(2.0) * r.powf(2.0)
-            - 2.0 * c.powf(2.0) * r.powf(2.0)
-            - 2.0 * e.powf(2.0) * r.powf(2.0)
-            + r.powf(2.0).powf(2.0);
-        let t1 = -4.0 * R.powf(2.0) * a * b + 4.0 * a.powf(3.0) * b + 4.0 * a * b * c.powf(2.0)
-            - 4.0 * R.powf(2.0) * c * d
+            - 2.0 * r2.powf(2.0) * r1.powf(2.0)
+            - 2.0 * a.powf(2.0) * r1.powf(2.0)
+            - 2.0 * c.powf(2.0) * r1.powf(2.0)
+            - 2.0 * e.powf(2.0) * r1.powf(2.0)
+            + r1.powf(2.0).powf(2.0);
+        let t1 = -4.0 * r2.powf(2.0) * a * b + 4.0 * a.powf(3.0) * b + 4.0 * a * b * c.powf(2.0)
+            - 4.0 * r2.powf(2.0) * c * d
             + 4.0 * a.powf(2.0) * c * d
             + 4.0 * c.powf(3.0) * d
             + 4.0 * a * b * e.powf(2.0)
             + 4.0 * c * d * e.powf(2.0)
-            + 4.0 * R.powf(2.0) * e * f
+            + 4.0 * r2.powf(2.0) * e * f
             + 4.0 * a.powf(2.0) * e * f
             + 4.0 * c.powf(2.0) * e * f
             + 4.0 * e.powf(3.0) * f
-            - 4.0 * a * b * r.powf(2.0)
-            - 4.0 * c * d * r.powf(2.0)
-            - 4.0 * e * f * r.powf(2.0);
-        let t2 = -2.0 * R.powf(2.0) * b.powf(2.0)
+            - 4.0 * a * b * r1.powf(2.0)
+            - 4.0 * c * d * r1.powf(2.0)
+            - 4.0 * e * f * r1.powf(2.0);
+        let t2 = -2.0 * r2.powf(2.0) * b.powf(2.0)
             + 6.0 * a.powf(2.0) * b.powf(2.0)
             + 2.0 * b.powf(2.0) * c.powf(2.0)
             + 8.0 * a * b * c * d
-            - 2.0 * R.powf(2.0) * d.powf(2.0)
+            - 2.0 * r2.powf(2.0) * d.powf(2.0)
             + 2.0 * a.powf(2.0) * d.powf(2.0)
             + 6.0 * c.powf(2.0) * d.powf(2.0)
             + 2.0 * b.powf(2.0) * e.powf(2.0)
             + 2.0 * d.powf(2.0) * e.powf(2.0)
             + 8.0 * a * b * e * f
             + 8.0 * c * d * e * f
-            + 2.0 * R.powf(2.0) * f.powf(2.0)
+            + 2.0 * r2.powf(2.0) * f.powf(2.0)
             + 2.0 * a.powf(2.0) * f.powf(2.0)
             + 2.0 * c.powf(2.0) * f.powf(2.0)
             + 6.0 * e.powf(2.0) * f.powf(2.0)
-            - 2.0 * b.powf(2.0) * r.powf(2.0)
-            - 2.0 * d.powf(2.0) * r.powf(2.0)
-            - 2.0 * f.powf(2.0) * r.powf(2.0);
+            - 2.0 * b.powf(2.0) * r1.powf(2.0)
+            - 2.0 * d.powf(2.0) * r1.powf(2.0)
+            - 2.0 * f.powf(2.0) * r1.powf(2.0);
         let t3 = 4.0 * a * b.powf(3.0)
             + 4.0 * b.powf(2.0) * c * d
             + 4.0 * a * b * d.powf(2.0)
@@ -1091,11 +1091,12 @@ impl Primitive for Torus {
         //Now we have the smallest non-zero t
         let point = ray.at_t(t);
         let (x, y, z) = (point.x, point.y, point.z);
-        let dx = 4.0 * (R.powf(2.0) - r.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * R
-            - 8.0 * (x.powf(2.0) + y.powf(2.0)) * R;
-        let dy = -4.0 * (R.powf(2.0) - r.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * r;
-        let dz = -8.0 * R.powf(2.0) * x
-            + 4.0 * (R.powf(2.0) - r.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * x;
+        let dx = 4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * r2
+            - 8.0 * (x.powf(2.0) + y.powf(2.0)) * r2;
+        let dy =
+            -4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * r1;
+        let dz = -8.0 * r2.powf(2.0) * x
+            + 4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * x;
         let normal = Unit::new_normalize(Vector3::new(dx, dy, dz));
 
         Some(Intersection {

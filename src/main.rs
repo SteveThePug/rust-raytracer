@@ -4,6 +4,8 @@ use error_iter::ErrorIter;
 const EPSILON: f32 = 1e-6;
 const INFINITY: f32 = f32::MAX;
 const EPSILON_VECTOR: Vector3<f32> = Vector3::new(EPSILON, EPSILON, EPSILON);
+static ZERO_VECTOR: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
+static UP_VECTOR: Vector3<f32> = Vector3::new(0.0, 1.0, 0.0);
 
 use log::error;
 use std::env;

@@ -39,7 +39,6 @@ pub struct Scene {
     pub materials: Vec<Material>,
     pub lights: Vec<Light>,
     pub cameras: Vec<Camera>,
-    pub camera: Camera,
 }
 
 impl Scene {
@@ -50,13 +49,6 @@ impl Scene {
             materials: Vec::new(),
             lights: Vec::new(),
             cameras: Vec::new(),
-            camera: Camera::new(
-                Point3::new(0.0, 0.0, -10.0),
-                Point3::new(0.0, 0.0, 0.0),
-                Vector3::new(0.0, 0.0, -1.0),
-                120.0,
-                1.0,
-            ),
         }
     }
     fn add_node(&mut self, node: Node) {
@@ -71,15 +63,8 @@ impl Scene {
     fn add_camera(&mut self, camera: Camera) {
         self.cameras.push(camera);
     }
-    fn set_camera(&mut self, camera: Camera) {
-        self.camera = camera;
-    }
 
-    fn get_camera(&self) -> &Camera {
-        &self.camera
-    }
-
-    pub fn from_script(filename: &str) -> Result<Scene, Box<EvalAltResult>> {
+    pub fn from_rhai(script: &str) -> Result<Scene, Box<EvalAltResult>> {
         let mut engine = Engine::new();
 
         engine
@@ -144,7 +129,7 @@ impl Scene {
             .register_type::<Torus>()
             .register_fn("Torus", Torus::new);
 
-        let scene: Scene = engine.eval_file(filename.into())?;
+        let scene: Scene = engine.eval(script.into())?;
         Ok(scene)
     }
 }

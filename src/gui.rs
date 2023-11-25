@@ -1,8 +1,8 @@
-use nalgebra::Point3;
+use crate::{camera::Camera, state::INIT_FILE, UP_VECTOR, ZERO_VECTOR};
+use imgui::*;
+use nalgebra::{Point3, Vector3};
 use pixels::{wgpu, PixelsContext};
 use std::time::Instant;
-
-const INIT_FILE: &str = "scene.rhai";
 
 const BUFFER_PROPORTION_INIT: f32 = 1.0;
 const BUFFER_PROPORTION_MIN: f32 = 0.5;
@@ -12,14 +12,14 @@ const RAYS_INIT: i32 = 9000;
 const RAYS_MIN: i32 = 100;
 const RAYS_MAX: i32 = 10000;
 
-const CAMERA_MIN: f32 = -10.0;
-const CAMERA_MAX: f32 = 10.0;
+const CAMERA_MIN_FOV: f32 = 10.0;
+const CAMERA_MAX_FOV: f32 = 160.0;
 const CAMERA_INIT: f32 = 5.0;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`test.
 pub enum GuiEvent {
-    BufferResize,
-    CameraRelocate,
+    BufferResize(f32),
+    CameraUpdate(Camera),
     SceneLoad(String),
 }
 
@@ -32,10 +32,16 @@ pub struct Gui {
 
     pub event: Option<GuiEvent>,
 
-    pub filename: String,
+    script_filename: String,
+    script: String,
     pub ray_num: i32,
-    pub buffer_proportion: f32,
-    pub camera_eye: Point3<f32>,
+
+    buffer_proportion: f32,
+
+    camera_eye: [f32; 3],
+    camera_target: [f32; 3],
+    camera_up: [f32; 3],
+    camera_fov: f32,
 }
 
 impl Gui {
@@ -85,10 +91,15 @@ impl Gui {
             last_frame: Instant::now(),
             last_cursor: None,
             event: None,
-            filename: String::from(INIT_FILE),
+            script_filename: String::from(INIT_FILE),
+            script: String::new(),
             ray_num: RAYS_INIT,
             buffer_proportion: BUFFER_PROPORTION_INIT,
-            camera_eye: Point3::new(CAMERA_INIT, CAMERA_INIT, CAMERA_INIT),
+
+            camera_eye: [CAMERA_INIT, CAMERA_INIT, CAMERA_INIT],
+            camera_target: ZERO_VECTOR.into(),
+            camera_up: UP_VECTOR.into(),
+            camera_fov: 110.0,
         }
     }
 
@@ -121,41 +132,62 @@ impl Gui {
             self.platform.prepare_render(ui, window);
         }
 
-        // Draw windows and GUI elements here
+        //Top Menu Bar
         let mut about_open = false;
         ui.main_menu_bar(|| {
             ui.menu("Help", || {
                 about_open = ui.menu_item("About...");
             });
         });
-        ui.slider("# Rays: ", RAYS_MIN, RAYS_MAX, &mut self.ray_num);
 
-        ui.slider(
-            "% Buffer: ",
-            BUFFER_PROPORTION_MIN,
-            BUFFER_PROPORTION_MAX,
-            &mut self.buffer_proportion,
-        );
-        if ui.button("Change Buffer") {
-            self.event = Some(GuiEvent::BufferResize);
-        };
-
-        ui.text("Vector3 Input:");
-        // Create three input fields for x, y, and z components
-        ui.slider("X", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[0]);
-        ui.slider("Y", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[1]);
-        ui.slider("Z", CAMERA_MIN, CAMERA_MAX, &mut self.camera_eye.coords[2]);
-        // Check if any component of the Vector3 has changed
-        if ui.button("Apply Camera") {
-            println!("Camera changed: {:?}", self.camera_eye);
-            self.camera_eye = Point3::from(self.camera_eye);
-            self.event = Some(GuiEvent::CameraRelocate);
+        //Raytracing options
+        if CollapsingHeader::new("Raytracer").build(ui) {
+            //Ray Renderer
+            ui.slider("# Rays: ", RAYS_MIN, RAYS_MAX, &mut self.ray_num);
+            //Buffer Options
+            ui.slider(
+                "% Buffer: ",
+                BUFFER_PROPORTION_MIN,
+                BUFFER_PROPORTION_MAX,
+                &mut self.buffer_proportion,
+            );
+            //Apply changes
+            if ui.button("Apply") {
+                self.event = Some(GuiEvent::BufferResize(self.buffer_proportion));
+            };
         }
-
-        //Load file from
-        ui.input_text("Scene file", &mut self.filename).build();
-        if ui.button("Apply File") {
-            self.event = Some(GuiEvent::SceneLoad(self.filename.clone()));
+        //Camera options
+        if CollapsingHeader::new("Camera").build(ui) {
+            ui.text("Camera options:");
+            ui.input_float3("Eye", &mut self.camera_eye).build();
+            ui.input_float3("Target", &mut self.camera_target).build();
+            ui.input_float3("Up", &mut self.camera_up).build();
+            ui.slider("fov", CAMERA_MIN_FOV, CAMERA_MAX_FOV, &mut self.camera_fov);
+            // Create three input fields for x, y, and z components
+            if ui.button("Apply Camera") {
+                println!("Camera changed: {:?}", self.camera_eye);
+                let camera = Camera::new(
+                    Point3::from_slice(&self.camera_eye),
+                    Point3::from_slice(&self.camera_target),
+                    Vector3::from_row_slice(&self.camera_up),
+                    1,
+                    1,
+                    self.camera_fov,
+                );
+                self.event = Some(GuiEvent::CameraUpdate(camera));
+            }
+        }
+        //Scripting
+        if CollapsingHeader::new("Scripting").build(ui) {
+            //Import from file (We just want to replace the contents of self.script)
+            ui.input_text("Scene file", &mut self.script_filename)
+                .build();
+            if ui.button("Import from File") {
+                self.event = Some(GuiEvent::SceneLoad(self.script_filename.clone()));
+            }
+            //Script block
+            ui.input_text_multiline("script", &mut self.script, [300., 100.])
+                .build();
         }
 
         // Render Dear ImGui with WGPU

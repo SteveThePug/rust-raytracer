@@ -6,6 +6,7 @@ use crate::{
 };
 use nalgebra::{Point3, Unit, Vector3};
 
+#[derive(Clone)]
 pub struct Ray {
     pub a: Point3<f32>,
     pub b: Unit<Vector3<f32>>,
@@ -13,6 +14,11 @@ pub struct Ray {
 
 impl Ray {
     pub fn new(a: Point3<f32>, b: Unit<Vector3<f32>>) -> Ray {
+        Ray { a, b }
+    }
+    pub fn unit() -> Ray {
+        let a = Point3::new(0.0, 0.0, 0.0);
+        let b = Unit::new_normalize(Vector3::new(0.0, 1.0, 0.0));
         Ray { a, b }
     }
     pub fn at_t(&self, t: f32) -> Point3<f32> {

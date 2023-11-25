@@ -15,9 +15,8 @@ impl Light {
             falloff,
         }
     }
-    pub fn white() -> Self {
+    pub fn white(position: Point3<f32>) -> Self {
         let colour = Vector3::new(1.0, 1.0, 1.0);
-        let position = Point3::new(0.0, 0.0, 0.0);
         let falloff = Vector3::new(1.0, 0.0, 0.0);
         Light::new(position, colour, falloff)
     }

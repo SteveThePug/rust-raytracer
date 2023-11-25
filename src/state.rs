@@ -1,6 +1,7 @@
 //Use linear algebra module
 
-use crate::{gui::Gui, ray::Ray, scene::Scene};
+use crate::camera::Camera;
+use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 
 use std::error::Error;
@@ -18,7 +19,7 @@ const START_WIDTH: i32 = 800;
 const START_HEIGHT: i32 = 800;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
 
-const INIT_FILE: &str = "test.rhai";
+pub const INIT_FILE: &str = "scene.rhai";
 
 pub fn run() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new();
@@ -27,8 +28,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let gui = Gui::new(&window, &pixels);
 
     let mut state = State::new(window, pixels, gui);
-    state.load_scene(&String::from(INIT_FILE));
-    state.resize_buffer()?;
+    state.resize_buffer(1.0)?;
 
     event_loop.run(move |event, _, control_flow| {
         state.gui.handle_event(&state.window, &event);
@@ -86,7 +86,7 @@ fn handle_window_event(
 
 pub struct State {
     scene: Scene,
-    rays: Vec<Ray>,
+    camera: Camera,
     window: Window,
     buffer_width: u32,
     buffer_height: u32,
@@ -96,29 +96,28 @@ pub struct State {
 }
 
 impl State {
-    pub fn update_scene_from_file(&mut self, filename: &String) -> Result<(), Box<dyn Error>> {
-        self.scene = Scene::from_script(filename)?.into();
-        let window_size = self.window.inner_size();
-        self.rays = self
-            .scene
-            .camera
-            .cast_rays(window_size.width, window_size.height);
+    pub fn import_rhai_from_file(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
+        let script = std::fs::read_to_string(filename)?;
+        self.scene = Scene::from_rhai(&script)?.into();
+        Ok(())
+    }
+
+    pub fn import_rhai(&mut self, script: &str) -> Result<(), Box<dyn Error>> {
+        self.scene = Scene::from_rhai(&script)?.into();
         Ok(())
     }
 
     pub fn new(window: Window, pixels: Pixels, gui: Gui) -> Self {
         let scene = Scene::empty();
         let window_size = window.inner_size();
-        let rays = scene
-            .camera
-            .cast_rays(window_size.width, window_size.height);
+        let camera = Camera::unit();
 
         Self {
             scene,
-            rays,
+            camera,
             window,
-            buffer_width: (window_size.width as f32 * gui.buffer_proportion) as u32,
-            buffer_height: (window_size.height as f32 * gui.buffer_proportion) as u32,
+            buffer_width: window_size.width as u32,
+            buffer_height: window_size.height as u32,
             pixels: Arc::new(Mutex::new(pixels)),
             gui,
             index: 0,
@@ -128,32 +127,25 @@ impl State {
     fn update(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(event) = self.gui.event.take() {
             match event {
-                GuiEvent::BufferResize | GuiEvent::CameraRelocate => self.resize_buffer()?,
-                GuiEvent::SceneLoad(filename) => self.load_scene(&filename),
+                GuiEvent::BufferResize(proportion) => self.resize_buffer(proportion)?,
+                GuiEvent::CameraUpdate(camera) => self.set_camera(camera),
+                GuiEvent::SceneLoad(script) => self.import_rhai(&script)?,
             }
         };
         Ok(())
     }
 
-    fn resize_buffer(&mut self) -> Result<(), Box<dyn Error>> {
+    fn resize_buffer(&mut self, proportion: f32) -> Result<(), Box<dyn Error>> {
         let size = self.window.inner_size();
-        self.buffer_width = (size.width as f32 * self.gui.buffer_proportion) as u32;
-        self.buffer_height = (size.height as f32 * self.gui.buffer_proportion) as u32;
+
+        self.buffer_width = (size.width as f32 * proportion) as u32;
+        self.buffer_height = (size.height as f32 * proportion) as u32;
+        self.camera.set_size(self.buffer_width, self.buffer_height);
+
         self.clear()?;
         let mut pixels = self.pixels.lock().unwrap();
         pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
         Ok(())
-    }
-
-    fn load_scene(&mut self, filename: &String) {
-        println!("Reading {}", filename);
-        match self.update_scene_from_file(filename) {
-            Err(e) => println!("{}", e),
-            Ok(()) => {
-                println!("Loaded file: {filename}");
-                self.render().expect("Could not draw new file");
-            }
-        }
     }
 
     fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
@@ -175,7 +167,8 @@ impl State {
     fn draw(&mut self) -> Result<(), Box<dyn Error>> {
         for _ in 0..self.gui.ray_num {
             let i = self.index as usize;
-            let colour = self.rays[i].shade_ray(&self.scene);
+            let camera = &self.camera;
+            let colour = camera.rays[i].shade_ray(&self.scene);
             let rgba = colour.map_or(COLOUR_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
             let mut pixels = self.pixels.lock().unwrap();
             let frame = pixels.frame_mut();
@@ -192,12 +185,12 @@ impl State {
         for pixel in frame.chunks_exact_mut(4) {
             pixel.copy_from_slice(&[0x00, 0x00, 0x00, 0xff]);
         }
-        self.scene.camera.set_position(self.gui.camera_eye);
-        self.rays = self
-            .scene
-            .camera
-            .cast_rays(self.buffer_width, self.buffer_height);
         Ok(())
+    }
+
+    fn set_camera(&mut self, camera: Camera) {
+        self.camera = camera;
+        self.camera.set_size(self.buffer_width, self.buffer_height);
     }
 
     fn render(&mut self) -> Result<(), Box<dyn Error>> {

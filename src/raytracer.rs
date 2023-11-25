@@ -1,8 +1,6 @@
-use crate::{light::Light, primitive::Intersection, scene::*};
+use crate::{light::Light, primitive::Intersection, scene::*, ZERO_VECTOR};
 
 use nalgebra::{Unit, Vector3};
-
-static ZERO_VECTOR: Vector3<f32> = Vector3::new(0.0, 0.0, 0.0);
 
 // Function to shade a point in the scene using Phong shading model
 pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8> {
