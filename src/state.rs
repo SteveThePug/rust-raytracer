@@ -15,8 +15,8 @@ use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEven
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-const START_WIDTH: i32 = 800;
-const START_HEIGHT: i32 = 800;
+const START_WIDTH: i32 = 1400;
+const START_HEIGHT: i32 = 1000;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
 
 pub const INIT_FILE: &str = "scene.rhai";
@@ -88,25 +88,18 @@ pub struct State {
     scene: Scene,
     camera: Camera,
     window: Window,
+
     buffer_width: u32,
     buffer_height: u32,
+
     pixels: Arc<Mutex<Pixels>>,
     gui: Gui,
+
     index: usize,
+    finished: bool,
 }
 
 impl State {
-    pub fn import_rhai_from_file(&mut self, filename: &str) -> Result<(), Box<dyn Error>> {
-        let script = std::fs::read_to_string(filename)?;
-        self.scene = Scene::from_rhai(&script)?.into();
-        Ok(())
-    }
-
-    pub fn import_rhai(&mut self, script: &str) -> Result<(), Box<dyn Error>> {
-        self.scene = Scene::from_rhai(&script)?.into();
-        Ok(())
-    }
-
     pub fn new(window: Window, pixels: Pixels, gui: Gui) -> Self {
         let scene = Scene::empty();
         let window_size = window.inner_size();
@@ -121,6 +114,7 @@ impl State {
             pixels: Arc::new(Mutex::new(pixels)),
             gui,
             index: 0,
+            finished: false,
         }
     }
 
@@ -128,8 +122,11 @@ impl State {
         if let Some(event) = self.gui.event.take() {
             match event {
                 GuiEvent::BufferResize(proportion) => self.resize_buffer(proportion)?,
-                GuiEvent::CameraUpdate(camera) => self.set_camera(camera),
-                GuiEvent::SceneLoad(script) => self.import_rhai(&script)?,
+                GuiEvent::CameraUpdate(camera) => self.set_camera(camera)?,
+                GuiEvent::SceneLoad(scene) => {
+                    self.scene = scene;
+                    self.clear()?;
+                }
             }
         };
         Ok(())
@@ -143,6 +140,7 @@ impl State {
         self.camera.set_size(self.buffer_width, self.buffer_height);
 
         self.clear()?;
+
         let mut pixels = self.pixels.lock().unwrap();
         pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
         Ok(())
@@ -173,13 +171,18 @@ impl State {
             let mut pixels = self.pixels.lock().unwrap();
             let frame = pixels.frame_mut();
             frame[i * 4..(i + 1) * 4].copy_from_slice(&rgba);
-            self.index = (self.index + 1) % (frame.len() / 4);
+            self.index = self.index + 1;
+            if self.index >= frame.len() / 4 {
+                self.finished = true;
+                return Ok(());
+            };
         }
         Ok(())
     }
 
     fn clear(&mut self) -> Result<(), Box<dyn Error>> {
         self.index = 0;
+        self.finished = false;
         let mut pixels = self.pixels.lock().unwrap();
         let frame = pixels.frame_mut();
         for pixel in frame.chunks_exact_mut(4) {
@@ -188,14 +191,18 @@ impl State {
         Ok(())
     }
 
-    fn set_camera(&mut self, camera: Camera) {
+    fn set_camera(&mut self, camera: Camera) -> Result<(), Box<dyn Error>> {
+        self.clear()?;
         self.camera = camera;
         self.camera.set_size(self.buffer_width, self.buffer_height);
+        Ok(())
     }
 
     fn render(&mut self) -> Result<(), Box<dyn Error>> {
         self.update()?; //Update state
-        self.draw()?; //Draw to pixels
+        if !self.finished {
+            self.draw()?;
+        }; //Draw to pixels
         let pixels = self.pixels.lock().unwrap();
         self.gui
             .prepare(&self.window)
