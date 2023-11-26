@@ -40,6 +40,8 @@ impl Ray {
 
         for node in nodes {
             let primitive = node.primitive.clone();
+            let trans = node.trans;
+            let inv_trans = node.inv_trans;
 
             if let Some(intersect) = primitive.intersect_ray(self) {
                 if intersect.distance < closest_distance {
@@ -50,5 +52,35 @@ impl Ray {
         }
 
         closest_intersect
+    }
+
+    pub fn cast_rays(fovy: f64, width: u32, height: u32) -> Vec<Ray> {
+        let aspect = width as f64 / height as f64;
+        let fovy_radians = fovy.to_radians();
+        //Verify this part later
+        let dir = Vector3::new(0.0, 0.0, 1.0);
+        let up = Vector3::new(0.0, 1.0, 0.0);
+        let hor = Vector3::new(1.0, 0.0, 0.0);
+        let half_height = fovy_radians.tan();
+        let half_width = aspect * half_height;
+
+        let d_hor_vec = hor * (2.0 * half_width / width as f64) as f64;
+        let d_vert_vec = up * (2.0 * half_height / height as f64) as f64;
+
+        //All good
+
+        let mut rays = Vec::with_capacity(width as usize * height as usize);
+
+        for j in 0..height as i32 {
+            for i in 0..width as i32 {
+                let horizontal = (i - half_width as i32) as f64 * (d_hor_vec);
+                let vertical = (-j + half_height as i32) as f64 * (d_vert_vec);
+
+                let direction = dir + horizontal + vertical;
+                let ray = Ray::new(Point3::new(0.0, 0.0, 0.0), Unit::new_normalize(direction));
+                rays.push(ray);
+            }
+        }
+        rays
     }
 }
