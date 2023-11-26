@@ -5,6 +5,7 @@ pub struct Light {
     pub position: Point3<f64>,
     pub colour: Vector3<f64>,
     pub falloff: Vector3<f64>,
+    pub ambient: bool,
 }
 
 impl Light {
@@ -13,11 +14,15 @@ impl Light {
             position,
             colour,
             falloff,
+            ambient: false,
         }
     }
-    pub fn white(position: Point3<f64>) -> Self {
-        let colour = Vector3::new(1.0, 1.0, 1.0);
-        let falloff = Vector3::new(1.0, 0.0, 0.0);
-        Light::new(position, colour, falloff)
+    pub fn ambient(colour: Vector3<f64>) -> Self {
+        Light {
+            position: Point3::new(0.0, 0.0, 0.0),
+            colour,
+            falloff: Vector3::new(0.0, 0.0, 0.0),
+            ambient: true,
+        }
     }
 }

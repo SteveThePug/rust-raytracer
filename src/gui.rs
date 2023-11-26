@@ -3,7 +3,7 @@ use crate::{
     light::Light,
     primitive::*,
     scene::{Node, Scene},
-    state::INIT_FILE,
+    state::{INIT_FILE, SAVE_FILE},
     UP_VECTOR_F32, ZERO_VECTOR_F32,
 };
 use imgui::*;
@@ -12,13 +12,13 @@ use pixels::{wgpu, PixelsContext};
 use rhai::Engine;
 use std::time::Instant;
 
-const BUFFER_PROPORTION_INIT: f32 = 1.0;
-const BUFFER_PROPORTION_MIN: f32 = 0.5;
+const BUFFER_PROPORTION_INIT: f32 = 0.2;
+const BUFFER_PROPORTION_MIN: f32 = 0.1;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
 const RAYS_INIT: i32 = 1000;
 const RAYS_MIN: i32 = 100;
-const RAYS_MAX: i32 = 100000;
+const RAYS_MAX: i32 = 30000;
 
 const CAMERA_MIN_FOV: f32 = 10.0;
 const CAMERA_MAX_FOV: f32 = 160.0;
@@ -29,6 +29,7 @@ pub enum GuiEvent {
     BufferResize(f32, f32),
     CameraUpdate(Camera),
     SceneLoad(Scene),
+    SaveImage(String),
 }
 
 pub struct Gui {
@@ -53,6 +54,8 @@ pub struct Gui {
     camera_target: [f32; 3],
     camera_up: [f32; 3],
     camera_fov: f32,
+
+    image_filename: String,
 }
 
 impl Gui {
@@ -115,6 +118,8 @@ impl Gui {
             camera_target: ZERO_VECTOR_F32.into(),
             camera_up: UP_VECTOR_F32.into(),
             camera_fov: 110.0,
+
+            image_filename: String::from(SAVE_FILE),
         }
     }
 
@@ -216,9 +221,23 @@ impl Gui {
                     Err(e) => println!("{e}"),
                 }
             }
+            if ui.button("Save script") {
+                match std::fs::write(&self.script_filename, &self.script) {
+                    Ok(_) => println!("Script saved successfully"),
+                    Err(e) => println!("{}", e),
+                }
+            }
             //Script block
             ui.input_text_multiline("script", &mut self.script, [600., 1500.])
                 .build();
+        }
+
+        if CollapsingHeader::new("Image").build(ui) {
+            ui.input_text("Image file", &mut self.image_filename)
+                .build();
+            if ui.button("Save Image") {
+                self.event = Some(GuiEvent::SaveImage(self.image_filename.clone()));
+            }
         }
 
         // Render Dear ImGui with WGPU
@@ -270,7 +289,9 @@ pub fn init_engine() -> Engine {
         .register_type::<Scene>()
         .register_fn("Scene", Scene::empty)
         .register_fn("addNode", Scene::add_node)
-        .register_fn("addLight", Scene::add_light);
+        .register_fn("addLight", Scene::add_light)
+        .register_fn("addCamera", Scene::add_camera)
+        .register_fn("addMaterial", Scene::add_material);
 
     engine
         .register_type::<Node>()
@@ -281,7 +302,8 @@ pub fn init_engine() -> Engine {
         .register_fn("child", Node::child);
     engine
         .register_type::<Light>()
-        .register_fn("Light", Light::new);
+        .register_fn("Light", Light::new)
+        .register_fn("Ambient", Light::ambient);
     engine
         .register_type::<Material>()
         .register_fn("Material", Material::new)
@@ -319,6 +341,9 @@ pub fn init_engine() -> Engine {
     engine
         .register_type::<Torus>()
         .register_fn("Torus", Torus::new);
+    engine
+        .register_type::<Mesh>()
+        .register_fn("Mesh", Mesh::from_file);
     engine
         .register_type::<Gnonom>()
         .register_fn("Gnonom", Gnonom::new);

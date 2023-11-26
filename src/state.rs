@@ -4,6 +4,7 @@ use crate::camera::Camera;
 use crate::ray::Ray;
 use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
+use std::path::Path;
 
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -19,11 +20,12 @@ use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEven
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-const START_WIDTH: i32 = 1400;
-const START_HEIGHT: i32 = 1000;
+const START_WIDTH: i32 = 1200;
+const START_HEIGHT: i32 = 1200;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
 
 pub const INIT_FILE: &str = "scene.rhai";
+pub const SAVE_FILE: &str = "img.png";
 
 pub struct State {
     scene: Scene,
@@ -75,6 +77,17 @@ impl State {
                     self.scene = scene;
                     self.reset_queue();
                 }
+                GuiEvent::SaveImage(filename) => {
+                    let pixels = self.pixels.lock().unwrap();
+                    let frame = pixels.frame();
+                    image::save_buffer(
+                        Path::new(&filename),
+                        frame,
+                        self.buffer_width,
+                        self.buffer_height,
+                        image::ColorType::Rgba8,
+                    )?
+                }
             }
         };
         Ok(())
@@ -93,13 +106,11 @@ impl State {
 
         let mut pixels = self.pixels.lock().unwrap();
         pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
+        pixels.resize_surface(size.width, size.height)?;
         Ok(())
     }
 
     fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
-        self.buffer_width = (size.width) as u32;
-        self.buffer_height = (size.height) as u32;
-        self.reset_queue();
         let mut pixels = self.pixels.lock().unwrap();
         pixels.resize_surface(size.width, size.height)?;
         Ok(())

@@ -24,7 +24,13 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
             position: light_position,
             colour: light_colour,
             falloff: light_falloff,
+            ambient: light_ambient,
         } = light;
+
+        if *light_ambient {
+            colour += light_colour;
+            continue;
+        }
 
         // Point to light
         let to_light = light_position - point;

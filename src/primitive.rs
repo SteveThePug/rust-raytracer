@@ -73,6 +73,7 @@ impl Intersection {
 
 // BOUNDING BOX -----------------------------------------------------------------
 #[derive(Clone)]
+
 struct BoundingBox {
     bln: Point3<f64>,
     trf: Point3<f64>,
@@ -97,6 +98,7 @@ impl BoundingBox {
             None
         }
     }
+    #[allow(dead_code)]
     fn get_centroid(&self) -> Point3<f64> {
         self.bln + (self.trf - self.bln) / 2.0
     }
@@ -689,7 +691,8 @@ impl Primitive for Cube {
 
 // TRIANGLE -----------------------------------------------------------------
 #[derive(Clone)]
-struct Triangle {
+#[allow(dead_code)]
+pub struct Triangle {
     u: Point3<f64>,
     v: Point3<f64>,
     w: Point3<f64>,
@@ -699,7 +702,7 @@ struct Triangle {
 }
 
 impl Triangle {
-    fn new(
+    pub fn new(
         u: Point3<f64>,
         v: Point3<f64>,
         w: Point3<f64>,
@@ -720,6 +723,7 @@ impl Triangle {
             bounding_box,
         })
     }
+    #[allow(dead_code)]
     pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
         let u = Point3::new(-1.0, 0.0, -1.0);
         let v = Point3::new(0.0, 0.0, 1.0);
@@ -780,14 +784,15 @@ impl Primitive for Triangle {
 
 // MESH -----------------------------------------------------------------
 #[derive(Clone)]
-struct Mesh {
+pub struct Mesh {
     triangles: Vec<Arc<Triangle>>,
     material: Arc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Mesh {
-    fn new(triangles: Vec<Arc<Triangle>>, material: Arc<Material>) -> Arc<dyn Primitive> {
+    #[allow(dead_code)]
+    pub fn new(triangles: Vec<Arc<Triangle>>, material: Arc<Material>) -> Arc<dyn Primitive> {
         // Calculate the bounding box for the entire mesh based on the bounding boxes of individual triangles
         let bounding_box = Mesh::compute_bounding_box(&triangles);
 
@@ -798,6 +803,7 @@ impl Mesh {
         })
     }
 
+    #[allow(dead_code)]
     fn compute_bounding_box(triangles: &Vec<Arc<Triangle>>) -> BoundingBox {
         let mut bln = Point3::new(INFINITY, INFINITY, INFINITY);
         let mut trf = -bln;
@@ -813,7 +819,7 @@ impl Mesh {
         BoundingBox { bln, trf }
     }
 
-    fn from_file(filename: &str, material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn from_file(filename: &str, material: Arc<Material>) -> Arc<dyn Primitive> {
         let mut triangles: Vec<Arc<dyn Primitive>> = Vec::new();
         let mut vertices: Vec<Point3<f64>> = Vec::new();
 

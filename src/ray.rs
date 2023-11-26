@@ -1,8 +1,8 @@
 use crate::{
-    primitive::{self, Intersection},
+    primitive::Intersection,
     raytracer::phong_shade_point,
     scene::{Node, Scene},
-    EPSILON, INFINITY,
+    INFINITY,
 };
 use nalgebra::{Matrix4, Point3, Vector3};
 
@@ -12,6 +12,7 @@ pub struct Ray {
     pub b: Vector3<f64>,
 }
 
+#[allow(dead_code)]
 impl Ray {
     pub fn new(a: Point3<f64>, b: Vector3<f64>) -> Ray {
         Ray {
@@ -45,7 +46,7 @@ impl Ray {
         for node in nodes {
             let primitive = node.primitive.clone();
 
-            //Transform ray to view coords
+            //Transform ray from view coords
             let ray = self.transform(&node.inv_viewmodel);
 
             if primitive.intersect_bounding_box(&ray).is_some() {
@@ -54,6 +55,7 @@ impl Ray {
                         closest_distance = intersect.distance;
                         //Convert back to world coords
                         let intersect = intersect.transform(&node.model, &node.inv_model);
+
                         closest_intersect = Some(intersect);
                     }
                 }
