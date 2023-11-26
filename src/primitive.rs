@@ -1,8 +1,8 @@
 #[allow(dead_code)]
 use crate::ray::Ray;
 use crate::{EPSILON, EPSILON_VECTOR, INFINITY};
-use nalgebra::{distance, Point3, Unit, Vector3};
-use roots::{find_roots_cubic, find_roots_quadratic, find_roots_quartic, Roots};
+use nalgebra::{distance, Matrix4, Point3, Vector3};
+use roots::{find_roots_quadratic, find_roots_quartic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
@@ -54,10 +54,21 @@ impl Material {
 pub struct Intersection {
     // Information about an intersection
     pub point: Point3<f64>,
-    pub normal: Unit<Vector3<f64>>,
-    pub incidence: Unit<Vector3<f64>>,
+    pub normal: Vector3<f64>,
+    pub incidence: Vector3<f64>,
     pub material: Arc<Material>,
     pub distance: f64,
+}
+impl Intersection {
+    pub fn transform(&self, trans: &Matrix4<f64>, inv_trans: &Matrix4<f64>) -> Intersection {
+        Intersection {
+            point: trans.transform_point(&self.point),
+            normal: inv_trans.transpose().transform_vector(&self.normal),
+            incidence: trans.transform_vector(&self.incidence),
+            material: self.material.clone(),
+            distance: self.distance,
+        }
+    }
 }
 
 // BOUNDING BOX -----------------------------------------------------------------
@@ -154,7 +165,7 @@ impl Primitive for Sphere {
         };
 
         let intersect = ray.at_t(t);
-        let normal = Unit::new_normalize(intersect - self.position);
+        let normal = (intersect - self.position).normalize();
         Some(Intersection {
             point: intersect,
             normal,
@@ -238,7 +249,7 @@ impl Primitive for Circle {
             false => {
                 return Some(Intersection {
                     point: intersect,
-                    normal: Unit::new_normalize(self.normal),
+                    normal: self.normal.normalize(),
                     incidence: ray.b,
                     material: Arc::clone(&self.material),
                     distance: t,
@@ -329,9 +340,9 @@ impl Primitive for Cylinder {
                     let normal = Vector3::new(2.0 * intersect.x, 0.0, 2.0 * intersect.z);
                     Some(Intersection {
                         point: intersect,
-                        normal: Unit::new_normalize(normal),
-                        material: Arc::clone(&self.material),
+                        normal: normal,
                         incidence: ray.b,
+                        material: Arc::clone(&self.material),
                         distance: t,
                     })
                 } else {
@@ -462,9 +473,9 @@ impl Primitive for Cone {
                 match intersect.y >= self.base && intersect.y <= self.apex {
                     true => Some(Intersection {
                         point: intersect,
-                        normal: Unit::new_normalize(self.get_normal(intersect)),
-                        material: Arc::clone(&self.material),
+                        normal: self.get_normal(intersect),
                         incidence: ray.b,
+                        material: Arc::clone(&self.material),
                         distance: t,
                     }),
                     false => None,
@@ -568,7 +579,7 @@ impl Primitive for Rectangle {
         if pi_dot_r1 >= -w2 && pi_dot_r1 <= w2 && pi_dot_r2 >= -h2 && pi_dot_r2 <= h2 {
             return Some(Intersection {
                 point: intersect,
-                normal: Unit::new_normalize(self.normal),
+                normal: self.normal,
                 incidence: ray.b,
                 material: Arc::clone(&self.material),
                 distance: t,
@@ -657,7 +668,7 @@ impl Primitive for Cube {
 
             Some(Intersection {
                 point: intersect,
-                normal: Unit::new_normalize(normal),
+                normal: normal,
                 incidence: ray.b,
                 material: Arc::clone(&self.material),
                 distance: tmin,
@@ -748,7 +759,7 @@ impl Primitive for Triangle {
         {
             Some(Intersection {
                 point: intersect,
-                normal: Unit::new_normalize(normal),
+                normal: normal,
                 incidence: ray.b,
                 material: Arc::clone(&self.material),
                 distance: t,
@@ -958,11 +969,12 @@ impl Primitive for SteinerSurface {
         //Now we have the smallest non-zero t
         let point = ray.at_t(t);
         let (x, y, z) = (point.x, point.y, point.z);
-        let normal = Unit::new_normalize(Vector3::new(
+        let normal = Vector3::new(
             2.0 * x * y * y + 2.0 * x * z * z + y * z,
             2.0 * x * x * y + 2.0 * z * z * y + x * z,
             2.0 * x * x * z + 2.0 * z * y * y + x * y,
-        ));
+        )
+        .normalize();
 
         Some(Intersection {
             point,
@@ -1106,7 +1118,7 @@ impl Primitive for Torus {
             -4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * r1;
         let dz = -8.0 * r2.powf(2.0) * x
             + 4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * x;
-        let normal = Unit::new_normalize(Vector3::new(dx, dy, dz));
+        let normal = Vector3::new(dx, dy, dz).normalize();
 
         Some(Intersection {
             point,

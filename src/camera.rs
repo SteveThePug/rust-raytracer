@@ -1,9 +1,4 @@
-use crate::ray::Ray;
-use crate::{EPSILON, INFINITY};
-use nalgebra::{Matrix4, Perspective3, Point3, Unit, Vector3};
-
-const ZNEAR: f64 = EPSILON;
-const ZFAR: f64 = INFINITY;
+use nalgebra::{Matrix4, Point3, Vector3};
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -11,8 +6,8 @@ pub struct Camera {
     eye: Point3<f64>,
     target: Point3<f64>,
     up: Vector3<f64>,
-    view: Matrix4<f64>,
-    inv_view: Matrix4<f64>,
+    pub view: Matrix4<f64>,
+    pub inv_view: Matrix4<f64>,
 }
 
 #[allow(dead_code)]

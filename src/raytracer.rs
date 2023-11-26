@@ -1,4 +1,4 @@
-use crate::{light::Light, primitive::Intersection, scene::*, ZERO_VECTOR};
+use crate::{light::Light, primitive::Intersection, ray::Ray, scene::*, EPSILON, ZERO_VECTOR};
 
 use nalgebra::{Unit, Vector3};
 
@@ -11,6 +11,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         material,
         ..
     } = intersect;
+
     let kd = material.kd;
     let ks = material.ks;
     let shininess = material.shininess;
@@ -28,9 +29,15 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         // Point to light
         let to_light = light_position - point;
         let light_distance = to_light.norm();
-        let to_light = Unit::new_normalize(to_light);
+        let to_light = to_light;
+
+        let to_light_ray = Ray::new(point.clone() + normal * EPSILON, to_light);
+        if light_blocked(scene, to_light_ray) {
+            continue;
+        }
+
         // Point to camera
-        let to_camera = Unit::new_normalize(-incidence.into_inner());
+        let to_camera = -incidence;
         // Diffuse component
         let n_dot_l = normal.dot(&to_light).max(0.0);
         let diffuse = n_dot_l * kd;
@@ -57,4 +64,16 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
     colour *= 255.0;
     let (r, g, b) = (colour.x as u8, colour.y as u8, colour.z as u8);
     Vector3::new(r, g, b)
+}
+
+fn light_blocked(scene: &Scene, ray: Ray) -> bool {
+    for node in &scene.nodes {
+        let ray = ray.transform(&node.inv_model);
+        if node.primitive.intersect_bounding_box(&ray).is_some() {
+            if node.primitive.intersect_ray(&ray).is_some() {
+                return true;
+            }
+        }
+    }
+    false
 }

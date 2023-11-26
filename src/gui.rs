@@ -1,16 +1,24 @@
-use crate::{camera::Camera, scene::Scene, state::INIT_FILE, UP_VECTOR_F32, ZERO_VECTOR_F32};
+use crate::{
+    camera::Camera,
+    light::Light,
+    primitive::*,
+    scene::{Node, Scene},
+    state::INIT_FILE,
+    UP_VECTOR_F32, ZERO_VECTOR_F32,
+};
 use imgui::*;
 use nalgebra::{Point3, Vector3};
 use pixels::{wgpu, PixelsContext};
+use rhai::Engine;
 use std::time::Instant;
 
 const BUFFER_PROPORTION_INIT: f32 = 1.0;
 const BUFFER_PROPORTION_MIN: f32 = 0.5;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
-const RAYS_INIT: i32 = 9000;
+const RAYS_INIT: i32 = 1000;
 const RAYS_MIN: i32 = 100;
-const RAYS_MAX: i32 = 10000;
+const RAYS_MAX: i32 = 100000;
 
 const CAMERA_MIN_FOV: f32 = 10.0;
 const CAMERA_MAX_FOV: f32 = 160.0;
@@ -18,7 +26,7 @@ const CAMERA_INIT: f32 = 5.0;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`test.
 pub enum GuiEvent {
-    BufferResize(f32),
+    BufferResize(f32, f32),
     CameraUpdate(Camera),
     SceneLoad(Scene),
 }
@@ -34,6 +42,7 @@ pub struct Gui {
 
     script_filename: String,
     script: String,
+    engine: Engine,
     scene: Scene,
 
     pub ray_num: i32,
@@ -63,7 +72,7 @@ impl Gui {
 
         // Configure Dear ImGui fonts
         let hidpi_factor = window.scale_factor();
-        let font_size = (11.0 * hidpi_factor) as f32;
+        let font_size = (16.0 * hidpi_factor) as f32;
         imgui.io_mut().font_global_scale = (1.0 / hidpi_factor) as f32;
         imgui
             .fonts()
@@ -96,6 +105,7 @@ impl Gui {
 
             script_filename: String::from(INIT_FILE),
             script: String::new(),
+            engine: init_engine(),
             scene: Scene::empty(),
 
             ray_num: RAYS_INIT,
@@ -156,9 +166,13 @@ impl Gui {
                 BUFFER_PROPORTION_MAX,
                 &mut self.buffer_proportion,
             );
+            ui.slider("fov", CAMERA_MIN_FOV, CAMERA_MAX_FOV, &mut self.camera_fov);
             //Apply changes
             if ui.button("Apply") {
-                self.event = Some(GuiEvent::BufferResize(self.buffer_proportion));
+                self.event = Some(GuiEvent::BufferResize(
+                    self.buffer_proportion,
+                    self.camera_fov,
+                ));
             };
         }
         //Camera options
@@ -167,7 +181,6 @@ impl Gui {
             ui.input_float3("Eye", &mut self.camera_eye).build();
             ui.input_float3("Target", &mut self.camera_target).build();
             ui.input_float3("Up", &mut self.camera_up).build();
-            ui.slider("fov", CAMERA_MIN_FOV, CAMERA_MAX_FOV, &mut self.camera_fov);
             // Create three input fields for x, y, and z components
             if ui.button("Apply Camera") {
                 println!("Camera changed: {:?}", self.camera_eye);
@@ -175,14 +188,10 @@ impl Gui {
                 let (ex, ey, ez) = (eye[0] as f64, eye[1] as f64, eye[2] as f64);
                 let (tx, ty, tz) = (target[0] as f64, target[1] as f64, target[2] as f64);
                 let (ux, uy, uz) = (up[0] as f64, up[1] as f64, up[2] as f64);
-
                 let camera = Camera::new(
                     Point3::new(ex, ey, ez),
                     Point3::new(tx, ty, tz),
                     Vector3::new(ux, uy, uz),
-                    1,
-                    1,
-                    self.camera_fov as f64,
                 );
                 self.event = Some(GuiEvent::CameraUpdate(camera));
             }
@@ -199,7 +208,7 @@ impl Gui {
                 }
             }
             if ui.button("Apply script") {
-                match Scene::from_rhai(&self.script) {
+                match self.engine.eval(&self.script) {
                     Ok(scene) => {
                         self.scene = scene;
                         self.event = Some(GuiEvent::SceneLoad(self.scene.clone()));
@@ -208,7 +217,7 @@ impl Gui {
                 }
             }
             //Script block
-            ui.input_text_multiline("script", &mut self.script, [500., 900.])
+            ui.input_text_multiline("script", &mut self.script, [600., 1500.])
                 .build();
         }
 
@@ -243,4 +252,75 @@ impl Gui {
         self.platform
             .handle_event(self.imgui.io_mut(), window, event);
     }
+}
+
+pub fn init_engine() -> Engine {
+    let mut engine = Engine::new();
+
+    engine
+        .register_type::<Vector3<f64>>()
+        .register_fn("V", Vector3::<f64>::new);
+    engine
+        .register_type::<Point3<f64>>()
+        .register_fn("P", Point3::<f64>::new);
+    engine
+        .register_type::<Camera>()
+        .register_fn("Camera", Camera::new);
+    engine
+        .register_type::<Scene>()
+        .register_fn("Scene", Scene::empty)
+        .register_fn("addNode", Scene::add_node)
+        .register_fn("addLight", Scene::add_light);
+
+    engine
+        .register_type::<Node>()
+        .register_fn("Node", Node::new)
+        .register_fn("translate", Node::translate)
+        .register_fn("rotate", Node::rotate)
+        .register_fn("scale", Node::scale)
+        .register_fn("child", Node::child);
+    engine
+        .register_type::<Light>()
+        .register_fn("Light", Light::new);
+    engine
+        .register_type::<Material>()
+        .register_fn("Material", Material::new)
+        .register_fn("MaterialRed", Material::red)
+        .register_fn("MaterialBlue", Material::blue)
+        .register_fn("MaterialGreen", Material::green)
+        .register_fn("MaterialMagenta", Material::magenta)
+        .register_fn("MaterialTurquoise", Material::turquoise);
+    engine
+        .register_type::<Sphere>()
+        .register_fn("Sphere", Sphere::new)
+        .register_fn("SphereUnit", Sphere::unit);
+    engine
+        .register_type::<Cube>()
+        .register_fn("Cube", Cube::new)
+        .register_fn("CubeUnit", Cube::unit);
+    engine
+        .register_type::<Cone>()
+        .register_fn("Cone", Cone::new)
+        .register_fn("ConeUnit", Cone::unit);
+    engine
+        .register_type::<Cylinder>()
+        .register_fn("Cylinder", Cylinder::new);
+    engine
+        .register_type::<Circle>()
+        .register_fn("Circle", Circle::new)
+        .register_fn("CircleUnit", Circle::unit);
+    engine
+        .register_type::<Rectangle>()
+        .register_fn("Rectangle", Rectangle::new)
+        .register_fn("RectangleUnit", Rectangle::unit);
+    engine
+        .register_type::<SteinerSurface>()
+        .register_fn("Steiner", SteinerSurface::new);
+    engine
+        .register_type::<Torus>()
+        .register_fn("Torus", Torus::new);
+    engine
+        .register_type::<Gnonom>()
+        .register_fn("Gnonom", Gnonom::new);
+    engine
 }

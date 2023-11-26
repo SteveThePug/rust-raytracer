@@ -1,6 +1,7 @@
 //Use linear algebra module
 
 use crate::camera::Camera;
+use crate::ray::Ray;
 use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 
@@ -35,6 +36,7 @@ pub struct State {
     pixels: Arc<Mutex<Pixels>>,
     gui: Gui,
 
+    rays: Vec<Ray>,
     ray_queue: Vec<usize>,
 }
 
@@ -43,6 +45,7 @@ impl State {
         let scene = Scene::empty();
         let window_size = window.inner_size();
         let camera = Camera::unit();
+        let rays = Vec::new();
 
         Self {
             scene,
@@ -52,6 +55,7 @@ impl State {
             buffer_height: window_size.height as u32,
             pixels: Arc::new(Mutex::new(pixels)),
             gui,
+            rays,
             ray_queue: Vec::new(),
         }
     }
@@ -59,25 +63,33 @@ impl State {
     fn update(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(event) = self.gui.event.take() {
             match event {
-                GuiEvent::BufferResize(proportion) => self.resize_buffer(proportion)?,
-                GuiEvent::CameraUpdate(camera) => self.set_camera(camera)?,
+                GuiEvent::BufferResize(proportion, fov) => {
+                    self.resize_buffer(proportion, fov as f64)?
+                }
+                GuiEvent::CameraUpdate(camera) => {
+                    self.camera = camera;
+                    self.clear()?;
+                    self.reset_queue();
+                }
                 GuiEvent::SceneLoad(scene) => {
                     self.scene = scene;
-                    self.clear()?;
+                    self.reset_queue();
                 }
             }
         };
         Ok(())
     }
 
-    fn resize_buffer(&mut self, proportion: f32) -> Result<(), Box<dyn Error>> {
+    fn resize_buffer(&mut self, proportion: f32, fovy: f64) -> Result<(), Box<dyn Error>> {
         let size = self.window.inner_size();
 
         self.buffer_width = (size.width as f32 * proportion) as u32;
         self.buffer_height = (size.height as f32 * proportion) as u32;
-        self.camera.set_size(self.buffer_width, self.buffer_height);
 
         self.clear()?;
+        self.reset_queue();
+
+        self.rays = Ray::cast_rays(fovy, self.buffer_width, self.buffer_height);
 
         let mut pixels = self.pixels.lock().unwrap();
         pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
@@ -85,6 +97,9 @@ impl State {
     }
 
     fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
+        self.buffer_width = (size.width) as u32;
+        self.buffer_height = (size.height) as u32;
+        self.reset_queue();
         let mut pixels = self.pixels.lock().unwrap();
         pixels.resize_surface(size.width, size.height)?;
         Ok(())
@@ -105,7 +120,7 @@ impl State {
             //Get random index from queue
             let index = self.ray_queue.pop().unwrap();
             //Shade colour for selected ray
-            let colour = &self.camera.rays[index].shade_ray(&self.scene);
+            let colour = &self.rays[index].shade_ray(&self.scene);
             //Assign colour to frame
             let rgba = colour.map_or(COLOUR_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
             let mut pixels = self.pixels.lock().unwrap();
@@ -128,19 +143,12 @@ impl State {
         Ok(())
     }
 
-    fn set_camera(&mut self, camera: Camera) -> Result<(), Box<dyn Error>> {
-        self.clear()?;
-        self.reset_queue();
-        self.camera = camera;
-        self.camera.set_size(self.buffer_width, self.buffer_height);
-        Ok(())
-    }
-
     fn reset_queue(&mut self) {
         let size = self.buffer_height as usize * self.buffer_width as usize;
         let mut ray_queue: Vec<usize> = (0..size).collect();
         ray_queue.shuffle(&mut thread_rng());
         self.ray_queue = ray_queue;
+        self.scene.compute(&self.camera.view, &self.camera.inv_view);
     }
 
     fn render(&mut self) -> Result<(), Box<dyn Error>> {
@@ -171,7 +179,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let gui = Gui::new(&window, &pixels);
 
     let mut state = State::new(window, pixels, gui);
-    state.resize_buffer(1.0)?;
+    state.resize_buffer(1.0, 90.0)?;
 
     event_loop.run(move |event, _, control_flow| {
         state.gui.handle_event(&state.window, &event);
@@ -186,6 +194,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                     *control_flow = ControlFlow::Exit;
                 }
             }
+
             Event::RedrawRequested(_) => {
                 if let Err(_e) = state.render() {
                     *control_flow = ControlFlow::Exit;
@@ -193,7 +202,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             }
             _ => state.window.request_redraw(),
         }
-    });
+    })
 }
 
 fn create_window(event_loop: &EventLoop<()>) -> Window {
