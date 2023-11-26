@@ -16,16 +16,20 @@ scene.addLight(light2);
 scene.addLight(ambient);
 
 
-// let sphere = Sphere(P(0.0,0.0,0.0), 4.0, material);
-// let node = Node(sphere);
-// scene.addNode(node);
+// let sphere = Sphere(P(0.0,0.0,0.0), 1.0, material);
+// let sphere_node = Node(sphere);
+// scene.addNode(sphere_node);
 
-let sphere = Adam( material);
-let node = Node(sphere);
-scene.addNode(node);
+// let cube = CubeUnit(material);
+// let cube_node = Node(cube);
+// scene.addNode(cube_node);
 
-// let stein = Steiner(material);
-// let node = Node(stein);
-// scene.addNode(node);
+let gnonom = Gnonom(material);
+let gnonom_node = Node(gnonom);
+scene.addNode(gnonom_node);
+
+// let cylinder = Cylinder(1.0,1.0, material);
+// let cylinder_node = Node(cylinder);
+// scene.addNode(cylinder_node);
 
 scene
