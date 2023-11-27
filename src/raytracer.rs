@@ -19,7 +19,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
     // Compute the ambient light component and set it as base colour
     let mut colour = Vector3::zeros();
 
-    for light in &scene.lights {
+    for (_, light) in &scene.lights {
         let Light {
             position: light_position,
             colour: light_colour,
@@ -73,7 +73,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
 }
 
 fn light_blocked(scene: &Scene, ray: Ray) -> bool {
-    for node in &scene.nodes {
+    for (_, node) in &scene.nodes {
         let ray = ray.transform(&node.inv_model);
         if node.primitive.intersect_bounding_box(&ray).is_some() {
             if node.primitive.intersect_ray(&ray).is_some() {

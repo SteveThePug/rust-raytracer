@@ -4,7 +4,6 @@ use crate::{
     primitive::*,
     scene::{Node, Scene},
     state::{INIT_FILE, SAVE_FILE},
-    EPSILON,
 };
 use imgui::*;
 use nalgebra::{Point3, Vector3};
@@ -12,16 +11,42 @@ use pixels::{wgpu, PixelsContext};
 use rhai::Engine;
 use std::time::Instant;
 
+//BUFFER CONSTANTS
 const BUFFER_PROPORTION_INIT: f32 = 0.2;
 const BUFFER_PROPORTION_MIN: f32 = 0.1;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
+//RAY CONSTANTS
 const RAYS_INIT: i32 = 7000;
 const RAYS_MIN: i32 = 100;
 const RAYS_MAX: i32 = 30000;
 
-const CAMERA_MIN_FOV: f32 = 10.0;
-const CAMERA_MAX_FOV: f32 = 160.0;
+//MATERIAL CONSTANTS
+const MIN_D: f32 = 0.0;
+const MIN_S: f32 = 0.0;
+const MIN_SHINE: f32 = 0.0;
+const MAX_D: f32 = 1.0;
+const MAX_S: f32 = 1.0;
+const MAX_SHINE: f32 = 50.0;
+
+//TRANSFORMATION CONSTANTS
+const MIN_COLOUR: f32 = 0.0;
+const MIN_FALLOFF: f32 = 0.0;
+const MIN_SCALE: f64 = 0.0;
+const MIN_POSITION: f64 = -10.0;
+const MIN_ROTATION: f64 = -180.0;
+const MIN_TRANSLATE: f64 = -10.0;
+//--
+const MAX_COLOUR: f32 = 1.0;
+const MAX_FALLOFF: f32 = 1.0;
+const MAX_SCALE: f64 = 3.0;
+const MAX_POSITION: f64 = 10.0;
+const MAX_ROTATION: f64 = 180.0;
+const MAX_TRANSLATE: f64 = 10.0;
+
+// CAMERA CONSTANTS
+const MIN_FOV: f32 = 10.0;
+const MAX_FOV: f32 = 160.0;
 const CAMERA_INIT: f32 = 5.0;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`test.
@@ -49,9 +74,7 @@ pub struct Gui {
 
     buffer_proportion: f32,
 
-    camera_eye: [f32; 3],
-    camera_target: [f32; 3],
-    camera_up: [f32; 3],
+    camera: Camera,
     camera_fov: f32,
 
     image_filename: String,
@@ -113,9 +136,7 @@ impl Gui {
             ray_num: RAYS_INIT,
             buffer_proportion: BUFFER_PROPORTION_INIT,
 
-            camera_eye: [CAMERA_INIT, CAMERA_INIT, CAMERA_INIT],
-            camera_target: Vector3::zeros().into(),
-            camera_up: Vector3::y().into(),
+            camera: Camera::unit(),
             camera_fov: 110.0,
 
             image_filename: String::from(SAVE_FILE),
@@ -170,7 +191,7 @@ impl Gui {
                 &mut self.buffer_proportion,
             );
             // Fov of the buffer
-            ui.slider("fov", CAMERA_MIN_FOV, CAMERA_MAX_FOV, &mut self.camera_fov);
+            ui.slider("fov", MIN_FOV, MAX_FOV, &mut self.camera_fov);
             // Apply stored changes
             if ui.button("Apply") {
                 self.event = Some(GuiEvent::BufferResize(
@@ -183,21 +204,15 @@ impl Gui {
         if CollapsingHeader::new("Camera").build(ui) {
             // Eye, target and up vector inputs
             ui.text("Camera options:");
-            ui.input_float3("Eye", &mut self.camera_eye).build();
-            ui.input_float3("Target", &mut self.camera_target).build();
-            ui.input_float3("Up", &mut self.camera_up).build();
+            ui.slider_config("Eye", MIN_TRANSLATE, MAX_TRANSLATE)
+                .build_array(self.camera.eye.coords.as_mut_slice());
+            ui.slider_config("Target", MIN_TRANSLATE, MAX_TRANSLATE)
+                .build_array(self.camera.target.coords.as_mut_slice());
+            ui.slider_config("Up", 0.0, 1.0)
+                .build_array(self.camera.up.as_mut_slice());
             if ui.button("Apply Camera") {
-                println!("Camera changed: {:?}", self.camera_eye);
-                let (eye, target, up) = (&self.camera_eye, &self.camera_target, &self.camera_up);
-                let (ex, ey, ez) = (eye[0] as f64, eye[1] as f64, eye[2] as f64);
-                let (tx, ty, tz) = (target[0] as f64, target[1] as f64, target[2] as f64);
-                let (ux, uy, uz) = (up[0] as f64, up[1] as f64, up[2] as f64);
-                let camera = Camera::new(
-                    Point3::new(ex, ey, ez),
-                    Point3::new(tx, ty, tz),
-                    Vector3::new(ux, uy, uz),
-                );
-                self.event = Some(GuiEvent::CameraUpdate(camera, self.camera_fov));
+                println!("Camera changed");
+                self.event = Some(GuiEvent::CameraUpdate(self.camera.clone(), self.camera_fov));
             }
         }
         // SCRIPTING --------------------------------------------
@@ -249,39 +264,58 @@ impl Gui {
         // SCENE --------------------------------------------
         if CollapsingHeader::new("Scene").build(ui) {
             if ui.button("Update Scene") {
-                for node in &mut self.scene.nodes {
+                for (_, node) in &mut self.scene.nodes {
                     node.compute();
                 }
                 self.event = Some(GuiEvent::SceneLoad(self.scene.clone()));
             }
             // Edit transformation of nodes
             if let Some(_t) = ui.tree_node("Nodes") {
-                for node in &mut self.scene.nodes {
-                    ui.text("node");
-                    ui.slider_config("Translation", -10.0, 10.0)
-                        .build_array(&mut node.translation);
-                    ui.slider_config("Rotation", -180.0, 180.0)
-                        .build_array(&mut node.rotation);
-                    ui.slider_config("Scale", -10.0, 10.0)
-                        .build_array(&mut node.scale);
+                for (label, node) in &mut self.scene.nodes {
+                    if let Some(_t) = ui.tree_node(label) {
+                        ui.slider_config("Translation", MIN_TRANSLATE, MAX_TRANSLATE)
+                            .build_array(&mut node.translation);
+                        ui.slider_config("Rotation", MIN_ROTATION, MAX_ROTATION)
+                            .build_array(&mut node.rotation);
+                        ui.slider_config("Scale", MIN_SCALE, MAX_SCALE)
+                            .build_array(&mut node.scale);
+                    }
                 }
             }
+            // Edit materials
+            // if let Some(_t) = ui.tree_node("Materials") {
+            //     for (label, material) in &mut self.scene.materials {
+            //         if let Some(_t) = ui.tree_node(label) {
+            //             ui.slider_config("ks", MIN_D, MIN_D)
+            //                 .build_array(material.ks.as_mut_slice());
+            //             ui.slider_config("kd", MIN_S, MAX_S)
+            //                 .build_array(material.kd.as_mut_slice());
+            //             ui.slider("fov", MIN_SHINE, MAX_SHINE, &mut material.shininess);
+            //         }
+            //     }
+            // }
             //Edit color, position and falloff of lights
             if let Some(_t) = ui.tree_node("Lights") {
-                for light in &mut self.scene.lights {
-                    ui.slider_config("Colour", 0.0, 1.0)
-                        .build_array(light.colour.as_mut_slice());
-                    ui.slider_config("Position", -10.0, 10.0)
-                        .build_array(light.position.coords.as_mut_slice());
-                    ui.slider_config("Falloff", 0.0, f32::MAX)
-                        .build_array(light.falloff.as_mut_slice());
+                for (label, light) in &mut self.scene.lights {
+                    if let Some(_t) = ui.tree_node(label) {
+                        ui.slider_config("Colour", MIN_COLOUR, MAX_COLOUR)
+                            .build_array(light.colour.as_mut_slice());
+                        ui.slider_config("Position", MIN_TRANSLATE, MAX_TRANSLATE)
+                            .build_array(light.position.coords.as_mut_slice());
+                        ui.slider_config("Falloff", MIN_FALLOFF, MAX_FALLOFF)
+                            .build_array(light.falloff.as_mut_slice());
+                    }
                 }
             }
             //Use different cameras in the scene
             if let Some(_t) = ui.tree_node("Cameras") {
-                for camera in &self.scene.cameras {
-                    if ui.button("Use camera") {
-                        GuiEvent::CameraUpdate(camera.clone(), self.camera_fov);
+                for (label, camera) in &self.scene.cameras {
+                    if let Some(_t) = ui.tree_node(label) {
+                        if ui.button("Use camera") {
+                            self.camera = camera.clone();
+                            self.event =
+                                Some(GuiEvent::CameraUpdate(camera.clone(), self.camera_fov));
+                        }
                     }
                 }
             }

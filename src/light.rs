@@ -9,7 +9,7 @@ pub struct Light {
 }
 
 impl Light {
-    pub fn new(position: Point3<f64>, colour: Vector3<f64>, falloff: Vector3<f64>) -> Self {
+    pub fn new(position: Point3<f64>, colour: Vector3<f64>, falloff: Vector3<f64>) -> Light {
         let colour = colour.cast();
         let falloff = falloff.cast();
         Light {
@@ -19,7 +19,7 @@ impl Light {
             ambient: false,
         }
     }
-    pub fn ambient(colour: Vector3<f64>) -> Self {
+    pub fn ambient(colour: Vector3<f64>) -> Light {
         Light {
             position: Point3::new(0.0, 0.0, 0.0),
             colour: colour.cast(),

@@ -6,7 +6,6 @@ use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 use std::path::Path;
 
-use nalgebra::{Point3, Vector3};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -20,7 +19,7 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
 const START_WIDTH: i32 = 1200;
-const START_HEIGHT: i32 = 1200;
+const START_HEIGHT: i32 = 700;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
 const PIXEL_CLEAR: [u8; 4] = [0x55, 0x00, 0x22, 0xff];
 
@@ -46,7 +45,7 @@ impl State {
     pub fn new(window: Window, pixels: Pixels, gui: Gui) -> Self {
         let scene = Scene::empty();
         let window_size = window.inner_size();
-        let camera = Camera::new(Point3::new(2.0, 2.0, 2.0), Point3::origin(), Vector3::y());
+        let camera = Camera::unit();
         let rays = Vec::new();
 
         Self {

@@ -2,15 +2,16 @@ use crate::camera::Camera;
 use crate::light::Light;
 use crate::primitive::*;
 use nalgebra::{Matrix4, Vector3};
+use std::collections::HashMap;
 use std::sync::Arc;
 #[derive(Clone)]
 pub struct Node {
     //Primitive
     pub primitive: Arc<dyn Primitive>,
     //Transformations
-    pub rotation: [f32; 3],
-    pub scale: [f32; 3],
-    pub translation: [f32; 3],
+    pub rotation: [f64; 3],
+    pub scale: [f64; 3],
+    pub translation: [f64; 3],
     //Model matricies
     pub model: Matrix4<f64>,
     pub inv_model: Matrix4<f64>,
@@ -43,27 +44,27 @@ impl Node {
         let yaw = yaw.to_radians();
 
         // Add the roll, pitch, and yaw to the current rotation
-        self.rotation[0] += roll as f32;
-        self.rotation[1] += pitch as f32;
-        self.rotation[2] += yaw as f32;
+        self.rotation[0] += roll;
+        self.rotation[1] += pitch;
+        self.rotation[2] += yaw;
 
         // Recompute the model and inverse model matrices
         self.compute();
     }
     // Translate a mesh by adding to its current position
     pub fn translate(&mut self, x: f64, y: f64, z: f64) {
-        self.translation[0] += x as f32;
-        self.translation[1] += y as f32;
-        self.translation[2] += z as f32;
+        self.translation[0] += x;
+        self.translation[1] += y;
+        self.translation[2] += z;
 
         // Recompute the model and inverse model matrices
         self.compute();
     }
     // Scale a mesh by adding to its current scale
     pub fn scale(&mut self, x: f64, y: f64, z: f64) {
-        self.scale[0] += x as f32;
-        self.scale[1] += y as f32;
-        self.scale[2] += z as f32;
+        self.scale[0] += x;
+        self.scale[1] += y;
+        self.scale[2] += z;
 
         // Recompute the model and inverse model matrices
         self.compute();
@@ -88,36 +89,36 @@ impl Node {
 
 #[derive(Clone)]
 pub struct Scene {
-    pub nodes: Vec<Node>,
-    pub materials: Vec<Material>,
-    pub lights: Vec<Light>,
-    pub cameras: Vec<Camera>,
+    pub nodes: HashMap<String, Node>,
+    pub materials: HashMap<String, Arc<Material>>,
+    pub lights: HashMap<String, Light>,
+    pub cameras: HashMap<String, Camera>,
 }
 
 impl Scene {
     // Creates an emptry scene
     pub fn empty() -> Self {
         Scene {
-            nodes: Vec::new(),
-            materials: Vec::new(),
-            lights: Vec::new(),
-            cameras: Vec::new(),
+            nodes: HashMap::new(),
+            materials: HashMap::new(),
+            lights: HashMap::new(),
+            cameras: HashMap::new(),
         }
     }
     // Adds a node to the scene
-    pub fn add_node(&mut self, node: Node) {
-        self.nodes.push(node);
+    pub fn add_node(&mut self, label: String, node: Node) {
+        self.nodes.insert(label, node);
     }
     // Adds a material to the scene
-    pub fn add_material(&mut self, material: Material) {
-        self.materials.push(material);
+    pub fn add_material(&mut self, label: String, material: Arc<Material>) {
+        self.materials.insert(label, material);
     }
     // Adds a light to the scene
-    pub fn add_light(&mut self, light: Light) {
-        self.lights.push(light);
+    pub fn add_light(&mut self, label: String, light: Light) {
+        self.lights.insert(label, light);
     }
     // Adds a camera to the scene
-    pub fn add_camera(&mut self, camera: Camera) {
-        self.cameras.push(camera);
+    pub fn add_camera(&mut self, label: String, camera: Camera) {
+        self.cameras.insert(label, camera);
     }
 }

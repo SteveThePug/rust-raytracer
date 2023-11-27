@@ -4,6 +4,7 @@ use crate::{
     scene::{Node, Scene},
 };
 use nalgebra::{Matrix4, Point3, Vector3};
+use std::collections::HashMap;
 
 #[derive(Clone)]
 // Ray struct represents a ray in 3D space with a starting point 'a' and a direction 'b'
@@ -43,12 +44,12 @@ impl Ray {
     }
 
     // Find the closest intersection
-    pub fn get_closest_intersection(&self, nodes: &Vec<Node>) -> Option<Intersection> {
+    pub fn get_closest_intersection(&self, nodes: &HashMap<String, Node>) -> Option<Intersection> {
         //Assign no intersection
         let mut closest_distance = f64::MAX;
         let mut closest_intersect: Option<Intersection> = None;
 
-        for node in nodes {
+        for (_, node) in nodes {
             // Clone arc to primitive
             let primitive = node.primitive.clone();
             // Transform ray into local model cordinates

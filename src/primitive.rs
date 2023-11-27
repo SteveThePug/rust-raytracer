@@ -23,7 +23,6 @@ impl Material {
     }
     pub fn magenta() -> Arc<Self> {
         let kd = Vector3::new(1.0, 0.0, 1.0);
-
         let ks = Vector3::new(1.0, 0.0, 1.0);
         let shininess = 0.5;
         Arc::new(Material { kd, ks, shininess })

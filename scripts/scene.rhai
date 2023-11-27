@@ -1,23 +1,27 @@
 let scene = Scene();
 
-let material = Material(V(0.2,0.2,0.2), V(0.2, 0.8, 0.8), 10.0);
+let camera = Camera( P(0.0,1.0,1.0), P(0.0,0.0,0.0), V(0.0,1.0,0.0));
+scene.addCamera("camera", camera);
 
-//let ambient = Light(P(10.0,0.0,0.0), V(1.0,1.0,1.0), V(0.0, 0.0, 0.0));
-//scene.addLight(ambient);
+let material = Material(V(0.2,0.2,0.2), V(0.2, 0.8, 0.8), 10.0);
+scene.addMaterial("bluegreen", material);
 
 let light = Light(P(0.0,7.0,0.0), V(0.0,0.0,1.0), V(0.1, 0.01, 0.001));
-scene.addLight(light);
-let light = Light(P(2.0,7.0,0.0), V(0.0,1.0,0.0), V(0.1, 0.01, 0.001));
-scene.addLight(light);
-let light = Light(P(-2.0,7.0,0.0), V(1.0,0.0,0.0), V(0.1, 0.01, 0.001));
-scene.addLight(light);
+scene.addLight("blue", light);
+
+let light = Light( P(2.0,7.0,0.0), V(0.0,1.0,0.0), V(0.1, 0.01, 0.001));
+scene.addLight("green", light);
+
+let light = Light( P(-2.0,7.0,0.0), V(1.0,0.0,0.0), V(0.1, 0.01, 0.001));
+scene.addLight("red", light);
+
 let light = Ambient(V(0.1,0.1,0.1));
-scene.addLight(light);
+scene.addLight("ambient", light);
 
 
 let sphere = Sphere(P(0.0,0.0,0.0), 1.0, material);
 let sphere_node = Node(sphere);
- scene.addNode(sphere_node);
+ scene.addNode("sphere", sphere_node);
 
 // for i in 0..6 {
 //     let sphere = Sphere(P(0.0,0.0,0.0), 2.0, material);
@@ -33,9 +37,9 @@ let sphere_node = Node(sphere);
 // let cube_node = Node(cube);
 // scene.addNode(cube_node);
 
-// let gnonom = Gnonom(material);
-// let gnonom_node = Node(gnonom);
-// scene.addNode(gnonom_node);
+let gnonom = Gnonom(material);
+let gnonom_node = Node(gnonom);
+scene.addNode("gnonom", gnonom_node);
 
 // let cylinder = Cylinder(10.0,1.0, material);
 // let cylinder_node = Node(cylinder);
