@@ -1,10 +1,5 @@
-use crate::{
-    primitive::Intersection,
-    raytracer::phong_shade_point,
-    scene::{Node, Scene},
-};
+use crate::{primitive::Intersection, raytracer::phong_shade_point, scene::Scene};
 use nalgebra::{Matrix4, Point3, Vector3};
-use std::collections::HashMap;
 
 #[derive(Clone)]
 // Ray struct represents a ray in 3D space with a starting point 'a' and a direction 'b'
@@ -35,42 +30,39 @@ impl Ray {
     // This function takes a scene and returns the color of the point where the ray intersects the scene
     pub fn shade_ray(&self, scene: &Scene) -> Option<Vector3<u8>> {
         //Get the closest intersection of the ray with the scene
-        let intersect = self.get_closest_intersection(&scene.nodes);
-        //Shade the intersection point if there is one
-        match intersect {
-            Some(intersect) => Some(phong_shade_point(&scene, &intersect)), // If there is an intersection, shade it
-            None => None, // If there is no intersection, return None
-        }
-    }
-
-    // Find the closest intersection
-    pub fn get_closest_intersection(&self, nodes: &HashMap<String, Node>) -> Option<Intersection> {
-        //Assign no intersection
         let mut closest_distance = f64::MAX;
         let mut closest_intersect: Option<Intersection> = None;
+        let mut closest_node = None;
 
-        for (_, node) in nodes {
-            // Clone arc to primitive
-            let primitive = node.primitive.clone();
+        for (_, node) in &scene.nodes {
             // Transform ray into local model cordinates
             let ray = self.transform(&node.inv_model);
             // Check bounding box intersection
-            if primitive.intersect_bounding_box(&ray).is_some() {
+            if node.primitive.intersect_bounding_box(&ray) {
                 // Check primitive intersection
-                if let Some(intersect) = primitive.intersect_ray(&ray) {
+                if let Some(intersect) = node.primitive.intersect_ray(&ray) {
                     // Check for closest distance
                     if intersect.distance < closest_distance {
                         closest_distance = intersect.distance;
-                        //Convert back to world coords
-                        let intersect = intersect.transform(&node.model, &node.inv_model);
                         closest_intersect = Some(intersect);
+                        closest_node = Some(node);
                     }
                 }
             }
         }
-        //Return None if we find no intersection, some if we do find one
-        closest_intersect
+
+        //Shade the intersection point if there is one
+        match closest_intersect {
+            Some(intersect) => {
+                //Inverse transform back to world coords
+                let node = closest_node.unwrap();
+                let intersect = intersect.transform(&node.model, &node.inv_model);
+                Some(phong_shade_point(&scene, &intersect)) // If there is an intersection, shade it
+            }
+            None => None, // If there is no intersection, return None
+        }
     }
+
     // Return a transformed version of the ray
     pub fn transform(&self, trans: &Matrix4<f64>) -> Ray {
         Ray {

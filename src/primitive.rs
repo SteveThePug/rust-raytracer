@@ -5,7 +5,7 @@ use nalgebra::{distance, Matrix4, Point3, Vector3};
 use roots::{find_roots_quadratic, find_roots_quartic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::sync::Arc;
+use std::rc::Rc;
 // MATERIAL -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Material {
@@ -15,41 +15,41 @@ pub struct Material {
 }
 
 impl Material {
-    pub fn new(kd: Vector3<f64>, ks: Vector3<f64>, shininess: f64) -> Arc<Self> {
+    pub fn new(kd: Vector3<f64>, ks: Vector3<f64>, shininess: f64) -> Rc<Self> {
         let kd = kd.cast();
         let ks = ks.cast();
         let shininess = shininess as f32;
-        Arc::new(Material { kd, ks, shininess })
+        Rc::new(Material { kd, ks, shininess })
     }
-    pub fn magenta() -> Arc<Self> {
+    pub fn magenta() -> Rc<Self> {
         let kd = Vector3::new(1.0, 0.0, 1.0);
         let ks = Vector3::new(1.0, 0.0, 1.0);
         let shininess = 0.5;
-        Arc::new(Material { kd, ks, shininess })
+        Rc::new(Material { kd, ks, shininess })
     }
-    pub fn turquoise() -> Arc<Self> {
+    pub fn turquoise() -> Rc<Self> {
         let kd = Vector3::new(0.25, 0.3, 0.7);
         let ks = Vector3::new(0.25, 0.3, 0.7);
         let shininess = 0.5;
-        Arc::new(Material { kd, ks, shininess })
+        Rc::new(Material { kd, ks, shininess })
     }
-    pub fn red() -> Arc<Self> {
+    pub fn red() -> Rc<Self> {
         let kd = Vector3::new(0.8, 0.0, 0.3);
         let ks = Vector3::new(0.8, 0.3, 0.0);
         let shininess = 0.5;
-        Arc::new(Material { kd, ks, shininess })
+        Rc::new(Material { kd, ks, shininess })
     }
-    pub fn blue() -> Arc<Self> {
+    pub fn blue() -> Rc<Self> {
         let kd = Vector3::new(0.0, 0.3, 0.6);
         let ks = Vector3::new(0.3, 0.0, 0.6);
         let shininess = 0.5;
-        Arc::new(Material { kd, ks, shininess })
+        Rc::new(Material { kd, ks, shininess })
     }
-    pub fn green() -> Arc<Self> {
+    pub fn green() -> Rc<Self> {
         let kd = Vector3::new(0.0, 1.0, 0.0);
         let ks = Vector3::new(0.0, 1.0, 0.0);
         let shininess = 0.5;
-        Arc::new(Material { kd, ks, shininess })
+        Rc::new(Material { kd, ks, shininess })
     }
 }
 
@@ -59,7 +59,7 @@ pub struct Intersection {
     pub point: Point3<f64>,
     pub normal: Vector3<f64>,
     pub incidence: Vector3<f64>,
-    pub material: Arc<Material>,
+    pub material: Rc<Material>,
     pub distance: f64,
 }
 impl Intersection {
@@ -76,7 +76,6 @@ impl Intersection {
 
 // BOUNDING BOX -----------------------------------------------------------------
 #[derive(Clone)]
-
 struct BoundingBox {
     bln: Point3<f64>,
     trf: Point3<f64>,
@@ -88,18 +87,30 @@ impl BoundingBox {
         let trf = trf - Vector3::new(EPSILON, EPSILON, EPSILON);
         BoundingBox { bln, trf }
     }
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
-        let t1 = (self.bln - ray.a).component_div(&ray.b);
-        let t2 = (self.trf - ray.a).component_div(&ray.b);
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
+        let bln = &self.bln;
+        let trf = &self.trf;
+        let t1 = (bln - ray.a).component_div(&ray.b);
+        let t2 = (trf - ray.a).component_div(&ray.b);
 
         let tmin = t1.inf(&t2).min();
         let tmax = t1.sup(&t2).max();
 
         if tmax >= tmin {
-            Some(ray.at_t(tmin))
-        } else {
-            None
+            let intersect = ray.at_t(tmin);
+
+            // Check if the intersection is inside the box
+            if intersect.x > bln.x - EPSILON
+                || intersect.x < trf.x + EPSILON
+                || intersect.y > bln.y - EPSILON
+                || intersect.y < trf.y + EPSILON
+                || intersect.z > bln.z - EPSILON
+                || intersect.z < trf.z + EPSILON
+            {
+                return true; // Intersection is outside the box
+            }
         }
+        false
     }
     #[allow(dead_code)]
     fn get_centroid(&self) -> Point3<f64> {
@@ -107,10 +118,10 @@ impl BoundingBox {
     }
 }
 // PRIMITIVE TRAIT -----------------------------------------------------------------
-pub trait Primitive: Send + Sync {
+pub trait Primitive {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection>;
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>>;
-    fn get_material(&self) -> Arc<Material>;
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool;
+    fn get_material(&self) -> Rc<Material>;
 }
 
 // SPHERE -----------------------------------------------------------------
@@ -119,16 +130,16 @@ pub struct Sphere {
     position: Point3<f64>,
     radius: f64,
     bounding_box: BoundingBox,
-    material: Arc<Material>,
+    material: Rc<Material>,
 }
 
 impl Sphere {
-    pub fn new(position: Point3<f64>, radius: f64, material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(position: Point3<f64>, radius: f64, material: Rc<Material>) -> Rc<dyn Primitive> {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
         let bounding_box = BoundingBox::new(bln, trf);
-        Arc::new(Sphere {
+        Rc::new(Sphere {
             position,
             radius,
             bounding_box,
@@ -136,7 +147,7 @@ impl Sphere {
         })
     }
 
-    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn unit(material: Rc<Material>) -> Rc<dyn Primitive> {
         Sphere::new(Point3::new(0.0, 0.0, 0.0), 1.0, material)
     }
 }
@@ -175,16 +186,16 @@ impl Primitive for Sphere {
             point: intersect,
             normal,
             incidence: ray.b,
-            material: Arc::clone(&self.material),
+            material: Rc::clone(&self.material),
             distance: t,
         })
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         return self.bounding_box.intersect_bounding_box(ray);
     }
 }
@@ -195,7 +206,7 @@ pub struct Circle {
     position: Point3<f64>,
     radius: f64,
     normal: Vector3<f64>,
-    material: Arc<Material>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
@@ -204,13 +215,13 @@ impl Circle {
         position: Point3<f64>,
         radius: f64,
         normal: Vector3<f64>,
-        material: Arc<Material>,
-    ) -> Arc<dyn Primitive> {
+        material: Rc<Material>,
+    ) -> Rc<dyn Primitive> {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
         let bounding_box = BoundingBox::new(bln, trf);
-        Arc::new(Circle {
+        Rc::new(Circle {
             position,
             radius,
             normal: normal.normalize(),
@@ -219,7 +230,7 @@ impl Circle {
         })
     }
 
-    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn unit(material: Rc<Material>) -> Rc<dyn Primitive> {
         let position = Point3::new(0.0, 0.0, 0.0);
         let normal = Vector3::new(0.0, 1.0, 0.0);
         let radius = 1.0;
@@ -229,7 +240,7 @@ impl Circle {
         let trf = Point3::new(radius, 0.0, EPSILON);
         let bounding_box = BoundingBox { bln, trf };
 
-        Arc::new(Circle {
+        Rc::new(Circle {
             position,
             normal,
             radius,
@@ -256,18 +267,18 @@ impl Primitive for Circle {
                     point: intersect,
                     normal: self.normal.normalize(),
                     incidence: ray.b,
-                    material: Arc::clone(&self.material),
+                    material: Rc::clone(&self.material),
                     distance: t,
                 })
             }
         }
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -277,29 +288,29 @@ impl Primitive for Circle {
 pub struct Cylinder {
     radius: f64,
     height: f64,
-    base_circle: Arc<dyn Primitive>,
-    top_circle: Arc<dyn Primitive>,
-    material: Arc<Material>,
+    base_circle: Rc<dyn Primitive>,
+    top_circle: Rc<dyn Primitive>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Cylinder {
-    pub fn new(radius: f64, height: f64, material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(radius: f64, height: f64, material: Rc<Material>) -> Rc<dyn Primitive> {
         let base_circle = Circle::new(
             Point3::new(0.0, 0.0, 0.0),
             radius,
             Vector3::new(0.0, -1.0, 0.0),
-            Arc::clone(&material),
+            Rc::clone(&material),
         );
         let top_circle = Circle::new(
             Point3::new(0.0, height, 0.0),
             radius,
             Vector3::new(0.0, 1.0, 0.0),
-            Arc::clone(&material),
+            Rc::clone(&material),
         );
         let bln = Point3::new(-radius, 0.0, -radius);
         let trf = Point3::new(radius, height, radius);
-        Arc::new(Cylinder {
+        Rc::new(Cylinder {
             radius,
             height,
             base_circle,
@@ -347,7 +358,7 @@ impl Primitive for Cylinder {
                         point: intersect,
                         normal: normal,
                         incidence: ray.b,
-                        material: Arc::clone(&self.material),
+                        material: Rc::clone(&self.material),
                         distance: t,
                     })
                 } else {
@@ -390,11 +401,11 @@ impl Primitive for Cylinder {
         }
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -405,22 +416,22 @@ pub struct Cone {
     radius: f64,
     base: f64,
     apex: f64,
-    circle: Arc<dyn Primitive>,
-    material: Arc<Material>,
+    circle: Rc<dyn Primitive>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Cone {
-    pub fn new(radius: f64, apex: f64, base: f64, material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(radius: f64, apex: f64, base: f64, material: Rc<Material>) -> Rc<dyn Primitive> {
         let circle = Circle::new(
             Point3::new(0.0, base, 0.0),
             radius,
             Vector3::new(0.0, 1.0, 0.0),
-            Arc::clone(&material),
+            Rc::clone(&material),
         );
         let bln = Point3::new(-radius, base, -radius);
         let trf = Point3::new(radius, base + apex, radius);
-        Arc::new(Cone {
+        Rc::new(Cone {
             radius: radius / 2.0,
             base,
             apex,
@@ -429,7 +440,7 @@ impl Cone {
             bounding_box: BoundingBox { bln, trf },
         })
     }
-    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn unit(material: Rc<Material>) -> Rc<dyn Primitive> {
         Cone::new(1.0, 2.0, -1.0, material)
     }
 
@@ -480,7 +491,7 @@ impl Primitive for Cone {
                         point: intersect,
                         normal: self.get_normal(intersect),
                         incidence: ray.b,
-                        material: Arc::clone(&self.material),
+                        material: Rc::clone(&self.material),
                         distance: t,
                     }),
                     false => None,
@@ -505,11 +516,11 @@ impl Primitive for Cone {
         }
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -520,7 +531,7 @@ pub struct Rectangle {
     position: Point3<f64>,
     normal: Vector3<f64>,
     width_direction: Vector3<f64>,
-    material: Arc<Material>,
+    material: Rc<Material>,
     width: f64,
     height: f64,
     bounding_box: BoundingBox,
@@ -533,14 +544,14 @@ impl Rectangle {
         width_direction: Vector3<f64>,
         width: f64,
         height: f64,
-        material: Arc<Material>,
-    ) -> Arc<dyn Primitive> {
+        material: Rc<Material>,
+    ) -> Rc<dyn Primitive> {
         let normal = normal.normalize();
         let width_direction = width_direction.normalize();
         let height_direction = width_direction.cross(&normal);
         let bln = position - width / 2.0 * width_direction - height / 2.0 * height_direction;
         let trf = position + width / 2.0 * width_direction + height / 2.0 * height_direction;
-        Arc::new(Rectangle {
+        Rc::new(Rectangle {
             position,
             normal: normal.normalize(),
             width_direction: width_direction.normalize(),
@@ -550,7 +561,7 @@ impl Rectangle {
             bounding_box: BoundingBox { bln, trf },
         })
     }
-    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn unit(material: Rc<Material>) -> Rc<dyn Primitive> {
         Rectangle::new(
             Point3::new(0.0, 0.0, 0.0),
             Vector3::new(0.0, 1.0, 0.0),
@@ -586,18 +597,18 @@ impl Primitive for Rectangle {
                 point: intersect,
                 normal: self.normal,
                 incidence: ray.b,
-                material: Arc::clone(&self.material),
+                material: Rc::clone(&self.material),
                 distance: t,
             });
         }
         None
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -607,13 +618,13 @@ impl Primitive for Rectangle {
 pub struct Cube {
     bln: Point3<f64>,
     trf: Point3<f64>,
-    material: Arc<Material>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Cube {
-    pub fn new(bln: Point3<f64>, trf: Point3<f64>, material: Arc<Material>) -> Arc<dyn Primitive> {
-        Arc::new(Cube {
+    pub fn new(bln: Point3<f64>, trf: Point3<f64>, material: Rc<Material>) -> Rc<dyn Primitive> {
+        Rc::new(Cube {
             bln,
             trf,
             material,
@@ -621,7 +632,7 @@ impl Cube {
         })
     }
 
-    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn unit(material: Rc<Material>) -> Rc<dyn Primitive> {
         let bln = Point3::new(-1.0, -1.0, -1.0);
         let trf = Point3::new(1.0, 1.0, 1.0);
         Cube::new(bln, trf, material)
@@ -646,12 +657,12 @@ impl Primitive for Cube {
             let intersect = ray.at_t(tmin);
 
             // Check if the intersection is outside the box
-            if intersect.x < bln.x
-                || intersect.x > trf.x
-                || intersect.y < bln.y
-                || intersect.y > trf.y
-                || intersect.z < bln.z
-                || intersect.z > trf.z
+            if intersect.x < bln.x - EPSILON
+                || intersect.x > trf.x + EPSILON
+                || intersect.y < bln.y - EPSILON
+                || intersect.y > trf.y + EPSILON
+                || intersect.z < bln.z - EPSILON
+                || intersect.z > trf.z + EPSILON
             {
                 return None; // Intersection is outside the box
             }
@@ -675,7 +686,7 @@ impl Primitive for Cube {
                 point: intersect,
                 normal: normal,
                 incidence: ray.b,
-                material: Arc::clone(&self.material),
+                material: Rc::clone(&self.material),
                 distance: tmin,
             })
         } else {
@@ -683,12 +694,12 @@ impl Primitive for Cube {
         }
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 }
 
@@ -700,7 +711,7 @@ pub struct Triangle {
     v: Point3<f64>,
     w: Point3<f64>,
     normal: Vector3<f64>,
-    material: Arc<Material>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
@@ -709,15 +720,15 @@ impl Triangle {
         u: Point3<f64>,
         v: Point3<f64>,
         w: Point3<f64>,
-        material: Arc<Material>,
-    ) -> Arc<dyn Primitive> {
+        material: Rc<Material>,
+    ) -> Rc<dyn Primitive> {
         let uv = v - u;
         let uw = w - u;
         let normal = uv.cross(&uw).normalize();
         let bln = u.inf(&v).inf(&w);
         let trf = u.sup(&v).sup(&w);
         let bounding_box = BoundingBox { bln, trf };
-        Arc::new(Triangle {
+        Rc::new(Triangle {
             u,
             v,
             w,
@@ -727,7 +738,7 @@ impl Triangle {
         })
     }
     #[allow(dead_code)]
-    pub fn unit(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn unit(material: Rc<Material>) -> Rc<dyn Primitive> {
         let u = Point3::new(-1.0, 0.0, -1.0);
         let v = Point3::new(0.0, 0.0, 1.0);
         let w = Point3::new(1.0, 0.0, -1.0);
@@ -768,7 +779,7 @@ impl Primitive for Triangle {
                 point: intersect,
                 normal: normal,
                 incidence: ray.b,
-                material: Arc::clone(&self.material),
+                material: Rc::clone(&self.material),
                 distance: t,
             })
         } else {
@@ -776,11 +787,11 @@ impl Primitive for Triangle {
         }
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -788,33 +799,29 @@ impl Primitive for Triangle {
 // MESH -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Mesh {
-    triangles: Vec<Arc<Triangle>>,
-    material: Arc<Material>,
+    triangles: Vec<Triangle>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Mesh {
-    #[allow(dead_code)]
-    pub fn new(triangles: Vec<Arc<Triangle>>, material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(triangles: Vec<Triangle>, material: Rc<Material>) -> Rc<dyn Primitive> {
         // Calculate the bounding box for the entire mesh based on the bounding boxes of individual triangles
         let bounding_box = Mesh::compute_bounding_box(&triangles);
-
-        Arc::new(Mesh {
+        Rc::new(Mesh {
             triangles,
             material,
             bounding_box,
         })
     }
 
-    #[allow(dead_code)]
-    fn compute_bounding_box(triangles: &Vec<Arc<Triangle>>) -> BoundingBox {
+    fn compute_bounding_box(triangles: &Vec<Triangle>) -> BoundingBox {
         let mut bln = Point3::new(INFINITY, INFINITY, INFINITY);
         let mut trf = -bln;
         for triangle in triangles {
             bln = bln.inf(&triangle.u);
             bln = bln.inf(&triangle.v);
             bln = bln.inf(&triangle.w);
-
             trf = trf.sup(&triangle.u);
             trf = trf.sup(&triangle.v);
             trf = trf.sup(&triangle.w);
@@ -822,8 +829,8 @@ impl Mesh {
         BoundingBox { bln, trf }
     }
 
-    pub fn from_file(filename: &str, material: Arc<Material>) -> Arc<dyn Primitive> {
-        let mut triangles: Vec<Arc<dyn Primitive>> = Vec::new();
+    pub fn from_file(filename: &str, material: Rc<Material>) -> Rc<dyn Primitive> {
+        let mut triangles: Vec<Triangle> = Vec::new();
         let mut vertices: Vec<Point3<f64>> = Vec::new();
 
         let file = File::open(filename).expect("Failed to open file");
@@ -857,10 +864,24 @@ impl Mesh {
                                 let v3: usize =
                                     v3_str.parse().expect("Failed to parse vertex index");
                                 // Indices in OBJ files are 1-based, so subtract 1 to convert to 0-based.
-                                let a = vertices[v1 - 1];
-                                let b = vertices[v2 - 1];
-                                let c = vertices[v3 - 1];
-                                triangles.push(Triangle::new(a, b, c, Arc::clone(&material)));
+                                let u = vertices[v1 - 1];
+                                let v = vertices[v2 - 1];
+                                let w = vertices[v3 - 1];
+                                let uv = u - v;
+                                let uw = w - v;
+                                let normal = uv.cross(&uw).normalize();
+                                let bln = u.inf(&v).inf(&w);
+                                let trf = u.sup(&v).sup(&w);
+                                let bounding_box = BoundingBox { bln, trf };
+                                let material = material.clone();
+                                triangles.push(Triangle {
+                                    u,
+                                    v,
+                                    w,
+                                    normal,
+                                    material,
+                                    bounding_box,
+                                });
                             }
                         }
                         _ => {}
@@ -868,7 +889,7 @@ impl Mesh {
                 }
             }
         }
-        todo!();
+        Mesh::new(triangles, material)
     }
 }
 
@@ -893,11 +914,11 @@ impl Primitive for Mesh {
         closest_intersect
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 }
@@ -905,16 +926,16 @@ impl Primitive for Mesh {
 // STEINER -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct SteinerSurface {
-    material: Arc<Material>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl SteinerSurface {
-    pub fn new(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(material: Rc<Material>) -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
         let trf = Point3::new(1.0, 1.0, 1.0);
         let bln = Point3::new(-1.0, -1.0, -1.0);
-        Arc::new(SteinerSurface {
+        Rc::new(SteinerSurface {
             material,
             bounding_box: BoundingBox { bln, trf },
         })
@@ -989,17 +1010,17 @@ impl Primitive for SteinerSurface {
             point,
             normal,
             incidence: ray.b,
-            material: Arc::clone(&self.material),
+            material: Rc::clone(&self.material),
             distance: t,
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 }
 
@@ -1017,16 +1038,16 @@ fn smallest_non_zero(arr: &[f64]) -> Option<f64> {
 pub struct Torus {
     inner_rad: f64,
     outer_rad: f64,
-    material: Arc<Material>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Torus {
-    pub fn new(inner_rad: f64, outer_rad: f64, material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(inner_rad: f64, outer_rad: f64, material: Rc<Material>) -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
         let trf = Point3::new(1.0, 1.0, 1.0);
         let bln = Point3::new(-1.0, -1.0, -1.0);
-        Arc::new(Torus {
+        Rc::new(Torus {
             inner_rad,
             outer_rad,
             material,
@@ -1133,34 +1154,34 @@ impl Primitive for Torus {
             point,
             normal,
             incidence: ray.b,
-            material: Arc::clone(&self.material),
+            material: Rc::clone(&self.material),
             distance: t,
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 
-    fn get_material(&self) -> Arc<Material> {
-        Arc::clone(&self.material)
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
     }
 }
 
 // GNOMON -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Gnonom {
-    x_cube: Arc<dyn Primitive>,
-    y_cube: Arc<dyn Primitive>,
-    z_cube: Arc<dyn Primitive>,
-    material: Arc<Material>,
+    x_cube: Rc<dyn Primitive>,
+    y_cube: Rc<dyn Primitive>,
+    z_cube: Rc<dyn Primitive>,
+    material: Rc<Material>,
     bounding_box: BoundingBox,
 }
 
 impl Gnonom {
     const GNONOM_WIDTH: f64 = 0.1;
     const GNONOM_LENGTH: f64 = 2.0;
-    pub fn new(material: Arc<Material>) -> Arc<dyn Primitive> {
+    pub fn new(material: Rc<Material>) -> Rc<dyn Primitive> {
         let x_cube = Cube::new(
             Point3::new(0.0, -Self::GNONOM_WIDTH, -Self::GNONOM_WIDTH),
             Point3::new(Self::GNONOM_LENGTH, Self::GNONOM_WIDTH, Self::GNONOM_WIDTH),
@@ -1188,7 +1209,7 @@ impl Gnonom {
                 Self::GNONOM_LENGTH,
             ),
         };
-        Arc::new(Gnonom {
+        Rc::new(Gnonom {
             x_cube,
             y_cube,
             z_cube,
@@ -1215,11 +1236,11 @@ impl Primitive for Gnonom {
         None
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
         self.bounding_box.intersect_bounding_box(ray)
     }
 
-    fn get_material(&self) -> Arc<Material> {
+    fn get_material(&self) -> Rc<Material> {
         self.material.clone()
     }
 }

@@ -17,17 +17,17 @@ const BUFFER_PROPORTION_MIN: f32 = 0.1;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
 //RAY CONSTANTS
-const RAYS_INIT: i32 = 7000;
+const RAYS_INIT: i32 = 100;
 const RAYS_MIN: i32 = 100;
-const RAYS_MAX: i32 = 30000;
+const RAYS_MAX: i32 = 10000;
 
 //MATERIAL CONSTANTS
-const MIN_D: f32 = 0.0;
-const MIN_S: f32 = 0.0;
-const MIN_SHINE: f32 = 0.0;
-const MAX_D: f32 = 1.0;
-const MAX_S: f32 = 1.0;
-const MAX_SHINE: f32 = 50.0;
+// const MIN_D: f32 = 0.0;
+// const MIN_S: f32 = 0.0;
+// const MIN_SHINE: f32 = 0.0;
+// const MAX_D: f32 = 1.0;
+// const MAX_S: f32 = 1.0;
+// const MAX_SHINE: f32 = 50.0;
 
 //TRANSFORMATION CONSTANTS
 const MIN_COLOUR: f32 = 0.0;
@@ -310,12 +310,9 @@ impl Gui {
             //Use different cameras in the scene
             if let Some(_t) = ui.tree_node("Cameras") {
                 for (label, camera) in &self.scene.cameras {
-                    if let Some(_t) = ui.tree_node(label) {
-                        if ui.button("Use camera") {
-                            self.camera = camera.clone();
-                            self.event =
-                                Some(GuiEvent::CameraUpdate(camera.clone(), self.camera_fov));
-                        }
+                    if ui.button(label) {
+                        self.camera = camera.clone();
+                        self.event = Some(GuiEvent::CameraUpdate(camera.clone(), self.camera_fov));
                     }
                 }
             }
@@ -413,9 +410,9 @@ pub fn init_engine() -> Engine {
         .register_fn("Circle", Circle::new)
         .register_fn("CircleUnit", Circle::unit);
     engine
-        .register_type::<Rectangle>()
-        .register_fn("Rectangle", Rectangle::new)
-        .register_fn("RectangleUnit", Rectangle::unit);
+        .register_type::<Cube>()
+        .register_fn("Cube", Cube::new)
+        .register_fn("CubeUnit", Cube::unit);
     engine
         .register_type::<SteinerSurface>()
         .register_fn("Steiner", SteinerSurface::new);

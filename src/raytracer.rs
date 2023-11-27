@@ -1,20 +1,20 @@
-use crate::{light::Light, primitive::Intersection, ray::Ray, scene::*, EPSILON};
+use crate::{light::Light, primitive::Intersection, ray::Ray, scene::*};
 
-use nalgebra::{Unit, Vector3};
+use nalgebra::Vector3;
 
 // Function to shade a point in the scene using Phong shading model
 pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8> {
-    let Intersection {
-        point,
-        normal,
-        incidence,
-        material,
-        ..
-    } = intersect;
+    let point = &intersect.point;
+    let material = &intersect.material;
+    let normal = &intersect.normal;
+    let incidence = &intersect.incidence;
 
-    let kd = material.kd;
-    let ks = material.ks;
+    let kd = &material.kd;
+    let ks = &material.ks;
     let shininess = material.shininess;
+
+    // Point to camera
+    let to_camera = -incidence;
 
     // Compute the ambient light component and set it as base colour
     let mut colour = Vector3::zeros();
@@ -37,13 +37,11 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         let light_distance = to_light.norm() as f32;
         let to_light = to_light;
 
-        let to_light_ray = Ray::new(point.clone() + normal * EPSILON, to_light);
-        if light_blocked(scene, to_light_ray) {
-            continue;
-        }
+        //let to_light_ray = Ray::new(point.clone() + normal * EPSILON, to_light);
+        // if light_blocked(scene, to_light_ray) {
+        //     continue;
+        // }
 
-        // Point to camera
-        let to_camera = -incidence;
         // Diffuse component
         let n_dot_l = normal.dot(&to_light).max(0.0) as f32;
         let diffuse = n_dot_l * kd;
@@ -51,11 +49,10 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         let mut specular = Vector3::zeros();
         if n_dot_l > 0.0 {
             // Halfway vector.
-            let h = Unit::new_normalize(to_camera.lerp(&to_light, 0.5));
+            let h = to_camera + to_light.normalize();
             let n_dot_h = normal.dot(&h).max(0.0) as f32;
             specular = ks * n_dot_h.powf(shininess);
         }
-
         // Compute light falloff
         let falloff = 1.0
             / (1.0
@@ -75,7 +72,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
 fn light_blocked(scene: &Scene, ray: Ray) -> bool {
     for (_, node) in &scene.nodes {
         let ray = ray.transform(&node.inv_model);
-        if node.primitive.intersect_bounding_box(&ray).is_some() {
+        if node.primitive.intersect_bounding_box(&ray) {
             if node.primitive.intersect_ray(&ray).is_some() {
                 return true;
             }

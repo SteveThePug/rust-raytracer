@@ -23,7 +23,7 @@ const START_HEIGHT: i32 = 700;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
 const PIXEL_CLEAR: [u8; 4] = [0x55, 0x00, 0x22, 0xff];
 
-pub const INIT_FILE: &str = "scene.rhai";
+pub const INIT_FILE: &str = "rhai/scene.rhai";
 pub const SAVE_FILE: &str = "img.png";
 
 pub struct State {
@@ -145,6 +145,7 @@ impl State {
 
     fn draw(&mut self) -> Result<(), Box<dyn Error>> {
         //Draw ray_num in a block
+        let frame = self.pixels.frame_mut();
         for _ in 0..self.gui.ray_num {
             //Get random index from queue
             let index = match self.ray_queue.pop() {
@@ -155,7 +156,6 @@ impl State {
             let colour = &self.rays[index].shade_ray(&self.scene);
             //Assign colour to pixel in frame
             let rgba = colour.map_or(PIXEL_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
-            let frame = self.pixels.frame_mut();
             frame[index * 4..(index + 1) * 4].copy_from_slice(&rgba);
         }
         Ok(())

@@ -3,11 +3,11 @@ use crate::light::Light;
 use crate::primitive::*;
 use nalgebra::{Matrix4, Vector3};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::rc::Rc;
 #[derive(Clone)]
 pub struct Node {
     //Primitive
-    pub primitive: Arc<dyn Primitive>,
+    pub primitive: Rc<dyn Primitive>,
     //Transformations
     pub rotation: [f64; 3],
     pub scale: [f64; 3],
@@ -19,7 +19,7 @@ pub struct Node {
 
 impl Node {
     //New node with no transformations
-    pub fn new(primitive: Arc<dyn Primitive>) -> Node {
+    pub fn new(primitive: Rc<dyn Primitive>) -> Node {
         Node {
             primitive,
             rotation: [0.0, 0.0, 0.0],
@@ -30,7 +30,7 @@ impl Node {
         }
     }
     //New node with parent transformations
-    pub fn child(self, primitive: Arc<dyn Primitive>) -> Node {
+    pub fn child(self, primitive: Rc<dyn Primitive>) -> Node {
         let mut child = self.clone();
         child.primitive = primitive;
         child
@@ -90,7 +90,7 @@ impl Node {
 #[derive(Clone)]
 pub struct Scene {
     pub nodes: HashMap<String, Node>,
-    pub materials: HashMap<String, Arc<Material>>,
+    pub materials: HashMap<String, Rc<Material>>,
     pub lights: HashMap<String, Light>,
     pub cameras: HashMap<String, Camera>,
 }
@@ -110,7 +110,7 @@ impl Scene {
         self.nodes.insert(label, node);
     }
     // Adds a material to the scene
-    pub fn add_material(&mut self, label: String, material: Arc<Material>) {
+    pub fn add_material(&mut self, label: String, material: Rc<Material>) {
         self.materials.insert(label, material);
     }
     // Adds a light to the scene
