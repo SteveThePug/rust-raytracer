@@ -1,6 +1,6 @@
 #[allow(dead_code)]
 use crate::ray::Ray;
-use crate::{EPSILON, EPSILON_VECTOR, INFINITY};
+use crate::{EPSILON, INFINITY};
 use nalgebra::{distance, Matrix4, Point3, Vector3};
 use roots::{find_roots_quadratic, find_roots_quartic, Roots};
 use std::fs::File;
@@ -9,17 +9,21 @@ use std::sync::Arc;
 // MATERIAL -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Material {
-    pub kd: Vector3<f64>,
-    pub ks: Vector3<f64>,
-    pub shininess: f64,
+    pub kd: Vector3<f32>,
+    pub ks: Vector3<f32>,
+    pub shininess: f32,
 }
 
 impl Material {
     pub fn new(kd: Vector3<f64>, ks: Vector3<f64>, shininess: f64) -> Arc<Self> {
+        let kd = kd.cast();
+        let ks = ks.cast();
+        let shininess = shininess as f32;
         Arc::new(Material { kd, ks, shininess })
     }
     pub fn magenta() -> Arc<Self> {
         let kd = Vector3::new(1.0, 0.0, 1.0);
+
         let ks = Vector3::new(1.0, 0.0, 1.0);
         let shininess = 0.5;
         Arc::new(Material { kd, ks, shininess })
@@ -81,8 +85,8 @@ struct BoundingBox {
 
 impl BoundingBox {
     fn new(bln: Point3<f64>, trf: Point3<f64>) -> Self {
-        let bln = bln - EPSILON_VECTOR;
-        let trf = trf + EPSILON_VECTOR;
+        let bln = bln + Vector3::new(EPSILON, EPSILON, EPSILON);
+        let trf = trf - Vector3::new(EPSILON, EPSILON, EPSILON);
         BoundingBox { bln, trf }
     }
     fn intersect_bounding_box(&self, ray: &Ray) -> Option<Point3<f64>> {

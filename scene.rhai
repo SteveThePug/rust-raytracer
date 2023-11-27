@@ -19,12 +19,12 @@ let sphere = Sphere(P(0.0,0.0,0.0), 1.0, material);
 let sphere_node = Node(sphere);
  scene.addNode(sphere_node);
 
-for i in 0..6 {
-    let sphere = Sphere(P(0.0,0.0,0.0), 2.0, material);
-    let sphere_node = Node(sphere);
-    sphere_node.translate(V(2.0*cos(i.to_float()), -4.0, 2.0*sin(i.to_float())));
-    scene.addNode(sphere_node);
-}
+// for i in 0..6 {
+//     let sphere = Sphere(P(0.0,0.0,0.0), 2.0, material);
+//     let sphere_node = Node(sphere);
+//     sphere_node.translate(2.0*cos(i.to_float()), -4.0, 2.0*sin(i.to_float()));
+//     scene.addNode(sphere_node);
+// }
 // let child = sphere_node.child(sphere);
 // child.translate(V(1.0,1.0,1.0));
 //scene.addNode(child);

@@ -4,7 +4,7 @@ use crate::{
     primitive::*,
     scene::{Node, Scene},
     state::{INIT_FILE, SAVE_FILE},
-    UP_VECTOR_F32, ZERO_VECTOR_F32,
+    EPSILON,
 };
 use imgui::*;
 use nalgebra::{Point3, Vector3};
@@ -16,7 +16,7 @@ const BUFFER_PROPORTION_INIT: f32 = 0.2;
 const BUFFER_PROPORTION_MIN: f32 = 0.1;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
-const RAYS_INIT: i32 = 1000;
+const RAYS_INIT: i32 = 7000;
 const RAYS_MIN: i32 = 100;
 const RAYS_MAX: i32 = 30000;
 
@@ -27,11 +27,10 @@ const CAMERA_INIT: f32 = 5.0;
 /// Manages all state required for rendering Dear ImGui over `Pixels`test.
 pub enum GuiEvent {
     BufferResize(f32, f32),
-    CameraUpdate(Camera),
+    CameraUpdate(Camera, f32),
     SceneLoad(Scene),
     SaveImage(String),
 }
-
 pub struct Gui {
     imgui: imgui::Context,
     platform: imgui_winit_support::WinitPlatform,
@@ -115,20 +114,19 @@ impl Gui {
             buffer_proportion: BUFFER_PROPORTION_INIT,
 
             camera_eye: [CAMERA_INIT, CAMERA_INIT, CAMERA_INIT],
-            camera_target: ZERO_VECTOR_F32.into(),
-            camera_up: UP_VECTOR_F32.into(),
+            camera_target: Vector3::zeros().into(),
+            camera_up: Vector3::y().into(),
             camera_fov: 110.0,
 
             image_filename: String::from(SAVE_FILE),
         }
     }
 
-    /// Prepare Dear ImGuBi.
+    /// Prepare Dear ImGui.
     pub fn prepare(
         &mut self,
         window: &winit::window::Window,
     ) -> Result<(), winit::error::ExternalError> {
-        // Prepare Dear ImGui
         let now = Instant::now();
         self.imgui.io_mut().update_delta_time(now - self.last_frame);
         self.last_frame = now;
@@ -153,26 +151,27 @@ impl Gui {
         }
 
         //Top Menu Bar
-        let mut about_open = false;
-        ui.main_menu_bar(|| {
-            ui.menu("Help", || {
-                about_open = ui.menu_item("About...");
-            });
-        });
+        // let mut about_open = false;
+        // ui.main_menu_bar(|| {
+        //     ui.menu("Help", || {
+        //         about_open = ui.menu_item("About...");
+        //     });
+        // });
 
-        //Raytracing options
+        //Raytracing options -------------------------------------------
         if CollapsingHeader::new("Raytracer").build(ui) {
-            //Ray Renderer
+            // Numbers of rays to render
             ui.slider("# Rays: ", RAYS_MIN, RAYS_MAX, &mut self.ray_num);
-            //Buffer Options
+            // Proportion of the window the buffer occupies
             ui.slider(
                 "% Buffer: ",
                 BUFFER_PROPORTION_MIN,
                 BUFFER_PROPORTION_MAX,
                 &mut self.buffer_proportion,
             );
+            // Fov of the buffer
             ui.slider("fov", CAMERA_MIN_FOV, CAMERA_MAX_FOV, &mut self.camera_fov);
-            //Apply changes
+            // Apply stored changes
             if ui.button("Apply") {
                 self.event = Some(GuiEvent::BufferResize(
                     self.buffer_proportion,
@@ -180,13 +179,13 @@ impl Gui {
                 ));
             };
         }
-        //Camera options
+        // CAMERA OPTIONS ----------------------------------------
         if CollapsingHeader::new("Camera").build(ui) {
+            // Eye, target and up vector inputs
             ui.text("Camera options:");
             ui.input_float3("Eye", &mut self.camera_eye).build();
             ui.input_float3("Target", &mut self.camera_target).build();
             ui.input_float3("Up", &mut self.camera_up).build();
-            // Create three input fields for x, y, and z components
             if ui.button("Apply Camera") {
                 println!("Camera changed: {:?}", self.camera_eye);
                 let (eye, target, up) = (&self.camera_eye, &self.camera_target, &self.camera_up);
@@ -198,21 +197,25 @@ impl Gui {
                     Point3::new(tx, ty, tz),
                     Vector3::new(ux, uy, uz),
                 );
-                self.event = Some(GuiEvent::CameraUpdate(camera));
+                self.event = Some(GuiEvent::CameraUpdate(camera, self.camera_fov));
             }
         }
-        //Scripting
+        // SCRIPTING --------------------------------------------
         if CollapsingHeader::new("Scripting").build(ui) {
-            //Import from file (We just want to replace the contents of self.script)
+            // Import file into multiline script
             ui.input_text("Scene file", &mut self.script_filename)
                 .build();
             if ui.button("Import from File") {
-                match std::fs::read_to_string(&self.script_filename) {
-                    Ok(script) => self.script = script,
-                    Err(e) => println!("{e}"),
+                match std::fs::read_to_string(&mut self.script_filename) {
+                    Ok(script) => {
+                        self.script = script;
+                    }
+                    Err(e) => println!("{}", e),
                 }
             }
-            if ui.button("Apply script") {
+            ui.same_line();
+            // Load scene from multiline script using engine
+            if ui.button("Load scene") {
                 match self.engine.eval(&self.script) {
                     Ok(scene) => {
                         self.scene = scene;
@@ -221,22 +224,66 @@ impl Gui {
                     Err(e) => println!("{e}"),
                 }
             }
+            ui.same_line();
+            // Save script to file
             if ui.button("Save script") {
                 match std::fs::write(&self.script_filename, &self.script) {
                     Ok(_) => println!("Script saved successfully"),
                     Err(e) => println!("{}", e),
                 }
             }
-            //Script block
-            ui.input_text_multiline("script", &mut self.script, [600., 1500.])
+            // Multiline script
+            ui.input_text_multiline("##", &mut self.script, [900., 300.])
                 .build();
         }
-
+        // IMAGE --------------------------------------------
         if CollapsingHeader::new("Image").build(ui) {
+            // Image filename
             ui.input_text("Image file", &mut self.image_filename)
                 .build();
+            // Save image to file
             if ui.button("Save Image") {
                 self.event = Some(GuiEvent::SaveImage(self.image_filename.clone()));
+            }
+        }
+        // SCENE --------------------------------------------
+        if CollapsingHeader::new("Scene").build(ui) {
+            if ui.button("Update Scene") {
+                for node in &mut self.scene.nodes {
+                    node.compute();
+                }
+                self.event = Some(GuiEvent::SceneLoad(self.scene.clone()));
+            }
+            // Edit transformation of nodes
+            if let Some(_t) = ui.tree_node("Nodes") {
+                for node in &mut self.scene.nodes {
+                    ui.text("node");
+                    ui.slider_config("Translation", -10.0, 10.0)
+                        .build_array(&mut node.translation);
+                    ui.slider_config("Rotation", -180.0, 180.0)
+                        .build_array(&mut node.rotation);
+                    ui.slider_config("Scale", -10.0, 10.0)
+                        .build_array(&mut node.scale);
+                }
+            }
+            //Edit color, position and falloff of lights
+            if let Some(_t) = ui.tree_node("Lights") {
+                for light in &mut self.scene.lights {
+                    ui.slider_config("Colour", 0.0, 1.0)
+                        .build_array(light.colour.as_mut_slice());
+                    ui.slider_config("Position", -10.0, 10.0)
+                        .build_array(light.position.coords.as_mut_slice());
+                    ui.slider_config("Falloff", 0.0, f32::MAX)
+                        .build_array(light.falloff.as_mut_slice());
+                }
+            }
+            //Use different cameras in the scene
+            if let Some(_t) = ui.tree_node("Cameras") {
+                for camera in &self.scene.cameras {
+                    if ui.button("Use camera") {
+                        GuiEvent::CameraUpdate(camera.clone(), self.camera_fov);
+                    }
+                }
             }
         }
 

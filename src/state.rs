@@ -6,12 +6,11 @@ use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 use std::path::Path;
 
+use nalgebra::{Point3, Vector3};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
 use std::error::Error;
-
-use std::sync::{Arc, Mutex};
 
 use anyhow::Result;
 use pixels::{Pixels, SurfaceTexture};
@@ -23,6 +22,7 @@ use winit::window::{Window, WindowBuilder};
 const START_WIDTH: i32 = 1200;
 const START_HEIGHT: i32 = 1200;
 const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
+const PIXEL_CLEAR: [u8; 4] = [0x55, 0x00, 0x22, 0xff];
 
 pub const INIT_FILE: &str = "scene.rhai";
 pub const SAVE_FILE: &str = "img.png";
@@ -35,7 +35,7 @@ pub struct State {
     buffer_width: u32,
     buffer_height: u32,
 
-    pixels: Arc<Mutex<Pixels>>,
+    pixels: Pixels,
     gui: Gui,
 
     rays: Vec<Ray>,
@@ -46,7 +46,7 @@ impl State {
     pub fn new(window: Window, pixels: Pixels, gui: Gui) -> Self {
         let scene = Scene::empty();
         let window_size = window.inner_size();
-        let camera = Camera::unit();
+        let camera = Camera::new(Point3::new(2.0, 2.0, 2.0), Point3::origin(), Vector3::y());
         let rays = Vec::new();
 
         Self {
@@ -55,7 +55,7 @@ impl State {
             window,
             buffer_width: window_size.width as u32,
             buffer_height: window_size.height as u32,
-            pixels: Arc::new(Mutex::new(pixels)),
+            pixels: pixels,
             gui,
             rays,
             ray_queue: Vec::new(),
@@ -68,18 +68,26 @@ impl State {
                 GuiEvent::BufferResize(proportion, fov) => {
                     self.resize_buffer(proportion, fov as f64)?
                 }
-                GuiEvent::CameraUpdate(camera) => {
+                GuiEvent::CameraUpdate(camera, fovy) => {
+                    self.rays = Ray::cast_rays(
+                        &camera.eye,
+                        &camera.target,
+                        &camera.up,
+                        fovy as f64,
+                        self.buffer_width,
+                        self.buffer_height,
+                    );
                     self.camera = camera;
                     self.clear()?;
                     self.reset_queue();
                 }
                 GuiEvent::SceneLoad(scene) => {
                     self.scene = scene;
+                    self.clear()?;
                     self.reset_queue();
                 }
                 GuiEvent::SaveImage(filename) => {
-                    let pixels = self.pixels.lock().unwrap();
-                    let frame = pixels.frame();
+                    let frame = self.pixels.frame();
                     image::save_buffer(
                         Path::new(&filename),
                         frame,
@@ -94,25 +102,35 @@ impl State {
     }
 
     fn resize_buffer(&mut self, proportion: f32, fovy: f64) -> Result<(), Box<dyn Error>> {
+        // Calculate new buffer dimensions based on proportion
         let size = self.window.inner_size();
-
         self.buffer_width = (size.width as f32 * proportion) as u32;
         self.buffer_height = (size.height as f32 * proportion) as u32;
 
+        // Clear the buffer and reset the ray queue
         self.clear()?;
         self.reset_queue();
 
-        self.rays = Ray::cast_rays(fovy, self.buffer_width, self.buffer_height);
+        // Recalculate rays with new buffer dimensions
+        self.rays = Ray::cast_rays(
+            &self.camera.eye,
+            &self.camera.target,
+            &self.camera.up,
+            fovy,
+            self.buffer_width,
+            self.buffer_height,
+        );
 
-        let mut pixels = self.pixels.lock().unwrap();
-        pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
+        // Resize buffer and surface
+        let pixels = &mut self.pixels;
         pixels.resize_surface(size.width, size.height)?;
+        pixels.resize_buffer(self.buffer_width, self.buffer_height)?;
+
         Ok(())
     }
 
     fn resize(&mut self, size: &PhysicalSize<u32>) -> Result<(), Box<dyn Error>> {
-        let mut pixels = self.pixels.lock().unwrap();
-        pixels.resize_surface(size.width, size.height)?;
+        self.pixels.resize_surface(size.width, size.height)?;
         Ok(())
     }
 
@@ -127,29 +145,27 @@ impl State {
     }
 
     fn draw(&mut self) -> Result<(), Box<dyn Error>> {
+        //Draw ray_num in a block
         for _ in 0..self.gui.ray_num {
             //Get random index from queue
-            let index = self.ray_queue.pop().unwrap();
+            let index = match self.ray_queue.pop() {
+                Some(index) => index,
+                None => break,
+            };
             //Shade colour for selected ray
             let colour = &self.rays[index].shade_ray(&self.scene);
-            //Assign colour to frame
-            let rgba = colour.map_or(COLOUR_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
-            let mut pixels = self.pixels.lock().unwrap();
-            let frame = pixels.frame_mut();
+            //Assign colour to pixel in frame
+            let rgba = colour.map_or(PIXEL_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
+            let frame = self.pixels.frame_mut();
             frame[index * 4..(index + 1) * 4].copy_from_slice(&rgba);
-
-            if self.ray_queue.is_empty() {
-                break;
-            };
         }
         Ok(())
     }
 
     fn clear(&mut self) -> Result<(), Box<dyn Error>> {
-        let mut pixels = self.pixels.lock().unwrap();
-        let frame = pixels.frame_mut();
+        let frame = self.pixels.frame_mut();
         for pixel in frame.chunks_exact_mut(4) {
-            pixel.copy_from_slice(&[0x00, 0x00, 0x00, 0xff]);
+            pixel.copy_from_slice(&COLOUR_CLEAR);
         }
         Ok(())
     }
@@ -159,26 +175,35 @@ impl State {
         let mut ray_queue: Vec<usize> = (0..size).collect();
         ray_queue.shuffle(&mut thread_rng());
         self.ray_queue = ray_queue;
-        self.scene.compute(&self.camera.view, &self.camera.inv_view);
     }
 
     fn render(&mut self) -> Result<(), Box<dyn Error>> {
-        self.update()?; //Update state
+        // Update state
+        self.update()?;
+        // Draw rays if we have remaining rays in queue
         if !self.ray_queue.is_empty() {
-            self.draw()?;
+            match self.draw() {
+                Err(e) => {
+                    println!("ERROR: {}", e);
+                }
+                _ => {}
+            }
         }
-        let pixels = self.pixels.lock().unwrap();
+        // Render Gui
         self.gui
             .prepare(&self.window)
-            .expect("gui.prepare() failed"); //Prepare imgui
-        if let Err(e) = pixels.render_with(|encoder, render_target, context| {
+            .expect("gui.prepare() failed");
+        // Try to render pixels
+        if let Err(e) = self.pixels.render_with(|encoder, render_target, context| {
             context.scaling_renderer.render(encoder, render_target); // Render pixels
             self.gui
                 .render(&self.window, encoder, render_target, context)?;
+
             Ok(())
         }) {
             log_error("pixels.render", e);
         };
+
         Ok(())
     }
 }

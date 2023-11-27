@@ -1,4 +1,4 @@
-use crate::{light::Light, primitive::Intersection, ray::Ray, scene::*, EPSILON, ZERO_VECTOR};
+use crate::{light::Light, primitive::Intersection, ray::Ray, scene::*, EPSILON};
 
 use nalgebra::{Unit, Vector3};
 
@@ -17,7 +17,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
     let shininess = material.shininess;
 
     // Compute the ambient light component and set it as base colour
-    let mut colour = ZERO_VECTOR;
+    let mut colour = Vector3::zeros();
 
     for light in &scene.lights {
         let Light {
@@ -34,7 +34,7 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
 
         // Point to light
         let to_light = light_position - point;
-        let light_distance = to_light.norm();
+        let light_distance = to_light.norm() as f32;
         let to_light = to_light;
 
         let to_light_ray = Ray::new(point.clone() + normal * EPSILON, to_light);
@@ -45,14 +45,14 @@ pub fn phong_shade_point(scene: &Scene, intersect: &Intersection) -> Vector3<u8>
         // Point to camera
         let to_camera = -incidence;
         // Diffuse component
-        let n_dot_l = normal.dot(&to_light).max(0.0);
+        let n_dot_l = normal.dot(&to_light).max(0.0) as f32;
         let diffuse = n_dot_l * kd;
         // Specular component
-        let mut specular = ZERO_VECTOR;
+        let mut specular = Vector3::zeros();
         if n_dot_l > 0.0 {
             // Halfway vector.
             let h = Unit::new_normalize(to_camera.lerp(&to_light, 0.5));
-            let n_dot_h = normal.dot(&h).max(0.0);
+            let n_dot_h = normal.dot(&h).max(0.0) as f32;
             specular = ks * n_dot_h.powf(shininess);
         }
 
