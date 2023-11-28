@@ -1,8 +1,10 @@
 use crate::{
     camera::Camera,
     light::Light,
+    material::*,
+    node::*,
     primitive::*,
-    scene::{Node, Scene},
+    scene::*,
     state::{INIT_FILE, SAVE_FILE},
 };
 use imgui::*;
@@ -33,21 +35,21 @@ const RAYS_MAX: i32 = 10000;
 const MIN_COLOUR: f32 = 0.0;
 const MIN_FALLOFF: f32 = 0.0;
 const MIN_SCALE: f64 = 0.0;
-const MIN_POSITION: f64 = -10.0;
+//const MIN_POSITION: f64 = -10.0;
 const MIN_ROTATION: f64 = -180.0;
 const MIN_TRANSLATE: f64 = -10.0;
 //--
 const MAX_COLOUR: f32 = 1.0;
 const MAX_FALLOFF: f32 = 1.0;
 const MAX_SCALE: f64 = 3.0;
-const MAX_POSITION: f64 = 10.0;
+//const MAX_POSITION: f64 = 10.0;
 const MAX_ROTATION: f64 = 180.0;
 const MAX_TRANSLATE: f64 = 10.0;
 
 // CAMERA CONSTANTS
 const MIN_FOV: f32 = 10.0;
 const MAX_FOV: f32 = 160.0;
-const CAMERA_INIT: f32 = 5.0;
+//const CAMERA_INIT: f32 = 5.0;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`test.
 pub enum GuiEvent {
@@ -272,6 +274,8 @@ impl Gui {
             // Edit transformation of nodes
             if let Some(_t) = ui.tree_node("Nodes") {
                 for (label, node) in &mut self.scene.nodes {
+                    ui.checkbox(format!("##active{label}"), &mut node.active);
+                    ui.same_line();
                     if let Some(_t) = ui.tree_node(label) {
                         ui.slider_config("Translation", MIN_TRANSLATE, MAX_TRANSLATE)
                             .build_array(&mut node.translation);
@@ -297,6 +301,8 @@ impl Gui {
             //Edit color, position and falloff of lights
             if let Some(_t) = ui.tree_node("Lights") {
                 for (label, light) in &mut self.scene.lights {
+                    ui.checkbox(format!("##activelight{label}"), &mut light.active);
+                    ui.same_line();
                     if let Some(_t) = ui.tree_node(label) {
                         ui.slider_config("Colour", MIN_COLOUR, MAX_COLOUR)
                             .build_array(light.colour.as_mut_slice());
@@ -377,11 +383,13 @@ pub fn init_engine() -> Engine {
         .register_fn("translate", Node::translate)
         .register_fn("rotate", Node::rotate)
         .register_fn("scale", Node::scale)
-        .register_fn("child", Node::child);
+        .register_fn("child", Node::child)
+        .register_fn("active", Node::set_active);
     engine
         .register_type::<Light>()
         .register_fn("Light", Light::new)
-        .register_fn("Ambient", Light::ambient);
+        .register_fn("Ambient", Light::ambient)
+        .register_fn("active", Light::set_active);
     engine
         .register_type::<Material>()
         .register_fn("Material", Material::new)
@@ -398,6 +406,10 @@ pub fn init_engine() -> Engine {
         .register_type::<Cube>()
         .register_fn("Cube", Cube::new)
         .register_fn("CubeUnit", Cube::unit);
+    engine
+        .register_type::<Triangle>()
+        .register_fn("Triangle", Triangle::new)
+        .register_fn("TriangleUnit", Triangle::unit);
     engine
         .register_type::<Cone>()
         .register_fn("Cone", Cone::new)
@@ -434,5 +446,12 @@ pub fn init_engine() -> Engine {
     engine
         .register_type::<Gnonom>()
         .register_fn("Gnonom", Gnonom::new);
+    engine
+        .register_type::<Mesh>()
+        .register_fn("Mesh", Mesh::from_file);
+    engine
+        .register_type::<Rectangle>()
+        .register_fn("Rectange", Rectangle::new)
+        .register_fn("RectangleUnit", Rectangle::unit);
     engine
 }

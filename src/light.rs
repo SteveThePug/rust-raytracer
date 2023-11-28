@@ -6,6 +6,7 @@ pub struct Light {
     pub colour: Vector3<f32>,
     pub falloff: Vector3<f32>,
     pub ambient: bool,
+    pub active: bool,
 }
 
 impl Light {
@@ -17,6 +18,7 @@ impl Light {
             colour,
             falloff,
             ambient: false,
+            active: true,
         }
     }
     pub fn ambient(colour: Vector3<f64>) -> Light {
@@ -25,6 +27,10 @@ impl Light {
             colour: colour.cast(),
             falloff: Vector3::new(0.0, 0.0, 0.0),
             ambient: true,
+            active: true,
         }
+    }
+    pub fn set_active(&mut self, active: bool) {
+        self.active = active;
     }
 }
