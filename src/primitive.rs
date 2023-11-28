@@ -506,17 +506,17 @@ impl Primitive for Cube {
 
             //Get normal of intersection point
             let normal = if tmin == t1.x {
-                Vector3::new(-1.0, 0.0, 0.0)
+                Vector3::new(1.0, 0.0, 0.0)
             } else if tmin == t1.y {
                 Vector3::new(0.0, -1.0, 0.0)
             } else if tmin == t1.z {
-                Vector3::new(0.0, 0.0, -1.0)
+                Vector3::new(0.0, 0.0, 1.0)
             } else if tmin == t2.x {
-                Vector3::new(1.0, 0.0, 0.0)
+                Vector3::new(-1.0, 0.0, 0.0)
             } else if tmin == t2.y {
                 Vector3::new(0.0, 1.0, 0.0)
             } else {
-                Vector3::new(0.0, 0.0, 1.0)
+                Vector3::new(0.0, 0.0, -1.0)
             };
 
             Some(Intersection {
@@ -535,6 +535,8 @@ impl Primitive for Cube {
 }
 
 // TRIANGLE -----------------------------------------------------------------
+// Points u,v,w will be pointing outward from uw x uv
+// Using the right hand rule
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct Triangle {
@@ -549,7 +551,7 @@ impl Triangle {
     pub fn new(u: Point3<f64>, v: Point3<f64>, w: Point3<f64>) -> Rc<dyn Primitive> {
         let uv = v - u;
         let uw = w - u;
-        let normal = uv.cross(&uw).normalize();
+        let normal = uw.cross(&uv).normalize();
         let bln = u.inf(&v).inf(&w);
         let trf = u.sup(&v).sup(&w);
         let bounding_box = BoundingBox { bln, trf };
@@ -572,40 +574,43 @@ impl Triangle {
 
 impl Primitive for Triangle {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        let constant = self.u.coords.dot(&self.normal);
-        let denominator = ray.b.dot(&self.normal);
-        let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+        let (u, v, w) = (self.u, self.v, self.w);
+        let e1 = v - u;
+        let e2 = w - u;
+        let b_cross_e2 = ray.b.cross(&e2);
+        let det = e1.dot(&b_cross_e2);
 
-        if t > INFINITY {
+        if det > -EPSILON && det < EPSILON {
             return None;
         }
 
-        let intersect = ray.at_t(t);
+        let inv_det = 1.0 / det;
+        let s = ray.a - u;
+        let p = inv_det * s.dot(&b_cross_e2);
 
-        let uv = self.v - self.u;
-        let vw = self.w - self.v;
-        let wu = self.u - self.w;
-
-        let ui = intersect - self.u;
-        let vi = intersect - self.v;
-        let wi = intersect - self.w;
-
-        let u_cross = uv.cross(&ui);
-        let v_cross = vw.cross(&vi);
-        let w_cross = wu.cross(&wi);
-
-        let normal = self.normal;
-
-        if u_cross.dot(&normal) >= 0.0 && v_cross.dot(&normal) >= 0.0 && w_cross.dot(&normal) >= 0.0
-        {
-            Some(Intersection {
-                point: intersect,
-                normal: normal,
-                distance: t,
-            })
-        } else {
-            None
+        if p < 0.0 || p > 1.0 {
+            return None;
         }
+
+        let s_cross_e1 = s.cross(&e1);
+        let v = inv_det * ray.b.dot(&s_cross_e1);
+
+        if v < 0.0 || p + v > 1.0 {
+            return None;
+        }
+        let t = inv_det * e2.dot(&s_cross_e1);
+
+        if t > EPSILON
+        // ray intersection
+        {
+            let intersect = ray.at_t(t);
+            return Some(Intersection {
+                point: intersect,
+                normal: self.normal,
+                distance: t,
+            });
+        }
+        None
     }
 
     fn intersect_bounding_box(&self, ray: &Ray) -> bool {

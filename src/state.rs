@@ -20,8 +20,8 @@ use winit::window::{Window, WindowBuilder};
 
 const START_WIDTH: i32 = 1200;
 const START_HEIGHT: i32 = 700;
-const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0xff];
-const PIXEL_CLEAR: [u8; 4] = [0x55, 0x00, 0x22, 0xff];
+const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0x00];
+const PIXEL_CLEAR: [u8; 4] = [0x55, 0x00, 0x22, 0x00];
 
 pub const INIT_FILE: &str = "rhai/scene.rhai";
 pub const SAVE_FILE: &str = "img.png";
@@ -153,9 +153,13 @@ impl State {
                 None => break,
             };
             //Shade colour for selected ray
-            let colour = &self.rays[index].shade_ray(&self.scene);
-            //Assign colour to pixel in frame
-            let rgba = colour.map_or(PIXEL_CLEAR, |colour| [colour.x, colour.y, colour.z, 255]);
+            let rgba = match &self.rays[index].shade_ray(&self.scene, 0) {
+                Some(mut colour) => {
+                    colour = colour * 255.0;
+                    [colour.x as u8, colour.y as u8, colour.z as u8, 0xff]
+                }
+                None => PIXEL_CLEAR,
+            };
             frame[index * 4..(index + 1) * 4].copy_from_slice(&rgba);
         }
         Ok(())
@@ -248,6 +252,7 @@ fn create_window(event_loop: &EventLoop<()>) -> Window {
         .with_title("Hello Pixels + Dear ImGui")
         .with_inner_size(size)
         .with_min_inner_size(size)
+        .with_transparent(true)
         .build(event_loop)
         .unwrap()
 }
