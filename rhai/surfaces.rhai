@@ -31,31 +31,33 @@ scene.addLight("red", light);
 let material = Material(V(0.2,0.2,0.2), V(0.2, 0.8, 0.8), 10.0);
 scene.addMaterial("bluegreen", material);
 
-let steiner = Steiner( material);
-let steiner_node = Node(steiner);
+let steiner = Steiner();
+let steiner_node = Node(steiner, material);
  scene.addNode("steiner", steiner_node);
 
-let steiner2 = Steiner2( material);
-let steiner2_node = Node(steiner2);
+let steiner2 = Steiner2();
+let steiner2_node = Node(steiner2, material2);
  scene.addNode("steiner2", steiner2_node);
 
-let crosscap = CrossCap(material);
-let crosscap_node = Node(crosscap);
+let crosscap = CrossCap();
+let crosscap_node = Node(crosscap, material);
  scene.addNode("crosscap", crosscap_node);
 
-let (p,q) = (1.0,1.0);
-let crosscap2 = CrossCap2( material);
-let crosscap2_node = Node(crosscap2);
+let p = 1.0;
+let q = 1.0;
+let crosscap2 = CrossCap2(p, q);
+let crosscap2_node = Node(crosscap2, material);
  scene.addNode("crosscap2", crosscap2_node);
 
-let k = 1.0;
-let roman = Roman(k, material);
-let roman_node = Node(roman);
- scene.addNode("sphere", roman_node);
+let k = 0.5;
+let roman = Roman(k );
+let roman_node = Node(roman, material);
+ scene.addNode("roman", roman_node);
 
-let (inner_rad, outer_rad) = (0.5, 0.5);
-let torus = Torus(inner_rad, outer_rad, material);
-let torus_node = Node(torus);
- scene.addNode("sphere", torus_node);
+let inner_rad = 1.0;
+let outer_rad = 0.5;
+let torus = Torus(inner_rad, outer_rad );
+let torus_node = Node(torus, material);
+ scene.addNode("torus", torus_node);
 
 scene

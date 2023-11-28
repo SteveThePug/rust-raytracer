@@ -30,17 +30,17 @@ let light = Ambient(V(0.1,0.1,0.1));
 scene.addLight("ambient", light);
 
 
-let sphere = Sphere(P(0.0,0.0,0.0), 1.0, material);
-let sphere_node = Node(sphere);
+let sphere = Sphere(P(0.0,0.0,0.0), 1.0 );
+let sphere_node = Node(sphere, material);
  scene.addNode("sphere", sphere_node);
 
-//let mesh = Mesh("obj/cow.obj", material);
+//let mesh = Mesh("obj/cow.obj" );
 //let mesh_node = Node(mesh);
 //scene.addNode("mesh", mesh_node);
 
 for i in 0..6 {
-    let sphere = Sphere(P(0.0,0.0,0.0), 2.0, material);
-     let sphere_node = Node(sphere);
+    let sphere = Sphere(P(0.0,0.0,0.0), 2.0 );
+     let sphere_node = Node(sphere, material);
      sphere_node.translate(2.0*cos(i.to_float()), -4.0, 2.0*sin(i.to_float()));
      scene.addNode(i.to_string(), sphere_node);
  }
@@ -48,15 +48,15 @@ for i in 0..6 {
 // child.translate(V(1.0,1.0,1.0));
 //scene.addNode(child);
 
-let cube = CubeUnit(material);
-let cube_node = Node(cube);
+let cube = CubeUnit();
+let cube_node = Node(cube, material);
 scene.addNode("cube", cube_node);
 
-//let gnonom = Gnonom(material);
+//let gnonom = Gnonom();
 //let gnonom_node = Node(gnonom);
 //scene.addNode("gnonom", gnonom_node);
 
-//let cylinder = Cylinder(2.0,1.0, material);
+//let cylinder = Cylinder(2.0,1.0 );
 //let cylinder_node = Node(cylinder);
 //cylinder_node.scale(1.0,1.0,1.0);
 //scene.addNode("cylinder",cylinder_node);
