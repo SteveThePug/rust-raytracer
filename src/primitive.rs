@@ -6,7 +6,7 @@ use crate::{
 
 #[allow(dead_code)]
 use nalgebra::{distance, Point3, Vector3};
-use roots::{find_roots_quadratic, find_roots_quartic, Roots};
+use roots::{find_roots_quadratic, find_roots_quartic, FloatType, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::rc::Rc;
@@ -89,6 +89,7 @@ pub struct Circle {
     position: Point3<f64>,
     radius: f64,
     normal: Vector3<f64>,
+    constant: f64,
     bounding_box: BoundingBox,
 }
 
@@ -98,51 +99,48 @@ impl Circle {
         let bln = position - radius_vec;
         let trf = position + radius_vec;
         let bounding_box = BoundingBox::new(bln, trf);
+
+        let normal = normal.normalize();
+        let constant = normal.dot(&position.coords);
         Rc::new(Circle {
             position,
             radius,
-            normal: normal.normalize(),
+            normal,
+            constant,
             bounding_box,
         })
     }
 
     pub fn unit() -> Rc<dyn Primitive> {
         let position = Point3::new(0.0, 0.0, 0.0);
-        let normal = Vector3::new(0.0, 1.0, 0.0);
+        let normal = Vector3::new(0.0, 0.0, -1.0);
         let radius = 1.0;
-
-        let bln = Point3::new(-radius, 0.0, -EPSILON);
-        let trf = Point3::new(radius, 0.0, EPSILON);
-        let bounding_box = BoundingBox { bln, trf };
-
-        Rc::new(Circle {
-            position,
-            normal,
-            radius,
-            bounding_box,
-        })
+        Circle::new(position, radius, normal)
     }
 }
 
 impl Primitive for Circle {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        let constant = self.position.coords.dot(&self.normal);
-        let denominator = ray.b.dot(&self.normal);
-        let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+        let n_dot_a = ray.a.coords.dot(&self.normal);
+        let n_dot_b = ray.b.dot(&self.normal);
+        let t = (self.constant - n_dot_a) / n_dot_b;
+
         if t > INFINITY {
             return None;
         };
+
         let intersect = ray.at_t(t);
-        let distance = distance(&intersect, &self.position);
-        match distance >= self.radius {
-            true => return None,
-            false => {
+        //Distance to center of circle
+        let distance = distance(&intersect, &self.position).abs();
+        match distance <= self.radius {
+            true => {
                 return Some(Intersection {
                     point: intersect,
-                    normal: self.normal.normalize(),
+                    normal: self.normal,
                     distance: t,
                 })
             }
+            false => return None,
         }
     }
 
@@ -271,56 +269,59 @@ impl Primitive for Cylinder {
 // CONE -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Cone {
-    radius: f64,
-    base: f64,
-    apex: f64,
+    height: f64,
+    constant: f64,
     circle: Rc<dyn Primitive>,
     bounding_box: BoundingBox,
 }
 
 impl Cone {
-    pub fn new(radius: f64, apex: f64, base: f64) -> Rc<dyn Primitive> {
+    pub fn new(radius: f64, height: f64) -> Rc<dyn Primitive> {
         let circle = Circle::new(
-            Point3::new(0.0, base, 0.0),
+            Point3::new(0.0, 0.0, 0.0),
             radius,
-            Vector3::new(0.0, 1.0, 0.0),
+            Vector3::new(0.0, -1.0, 0.0),
         );
-        let bln = Point3::new(-radius, base, -radius);
-        let trf = Point3::new(radius, base + apex, radius);
+        let bln = Point3::new(-radius, 0.0, -radius);
+        let trf = Point3::new(radius, height, radius);
+        let constant = radius * radius / (height * height);
         Rc::new(Cone {
-            radius: radius / 2.0,
-            base,
-            apex,
+            height,
+            constant,
             circle,
             bounding_box: BoundingBox { bln, trf },
         })
     }
     pub fn unit() -> Rc<dyn Primitive> {
-        Cone::new(1.0, 2.0, -1.0)
+        Cone::new(0.5, 1.0)
     }
 
     pub fn get_normal(&self, intersect: Point3<f64>) -> Vector3<f64> {
-        let r = self.radius;
-        let h = self.apex;
         let (x, y, z) = (intersect.x, intersect.y, intersect.z);
-        let normal = Vector3::new(2.0 * x, 2.0 * r * r * (h - y), 2.0 * z).normalize();
-        normal
+        let dx = 2.0 * x;
+        let dy = 2.0 * self.constant * (self.height - y);
+        let dz = 2.0 * z;
+        Vector3::new(dx, dy, dz).normalize()
     }
 }
 
 impl Primitive for Cone {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        let point = &ray.a;
-        let dir = &ray.b;
-        let (r, h) = (self.radius, self.apex);
-        let (a1, a2, a3) = (point.x, point.y, point.z);
-        let (b1, b2, b3) = (dir.x, dir.y, dir.z);
-        let r2 = r * r;
-        let a = b1 * b1 + b3 * b3 - r2 * (b2 * b2);
-        let b = 2.0 * (a1 * b1 + a3 * b3 + r2 * (h * b2 - a2 * b2));
-        let c = a1 * a1 + a3 * a3 + r2 * (2.0 * h * a2 - h * h - a2 * a2);
+        let k1 = self.constant;
+        let k2 = self.height;
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
 
-        let t = match find_roots_quadratic(a, b, c) {
+        let t0 =
+            -c.powf(2.0) * k1 + 2.0 * c * k1 * k2 - k1 * k2.powf(2.0) + a.powf(2.0) + e.powf(2.0);
+        let t1 = -2.0 * c * d * k1 + 2.0 * d * k1 * k2 + 2.0 * a * b + 2.0 * e * f;
+        let t2 = -d.powf(2.0) * k1 + b.powf(2.0) + f.powf(2.0);
+
+        let t = match find_roots_quadratic(t2, t1, t0) {
             Roots::No(_) => None,
             Roots::One([x1]) => Some(x1),
             Roots::Two([x1, x2]) => {
@@ -341,7 +342,7 @@ impl Primitive for Cone {
             None => None,
             Some(t) => {
                 let intersect = ray.at_t(t);
-                match intersect.y >= self.base && intersect.y <= self.apex {
+                match intersect.y >= 0.0 && intersect.y <= self.height {
                     true => Some(Intersection {
                         point: intersect,
                         normal: self.get_normal(intersect),
@@ -358,14 +359,7 @@ impl Primitive for Cone {
             (None, None) => None,
             (Some(cone_intersect), None) => Some(cone_intersect),
             (None, Some(circle_intersect)) => Some(circle_intersect),
-            (Some(cone_intersect), Some(circle_intersect)) => {
-                let circle_distance = distance(&ray.a, &circle_intersect.point);
-                let cone_distance = distance(&ray.a, &cone_intersect.point);
-                match cone_distance < circle_distance {
-                    true => Some(cone_intersect),
-                    false => Some(circle_intersect),
-                }
-            }
+            (Some(cone_intersect), Some(_)) => Some(cone_intersect),
         }
     }
 
@@ -505,18 +499,19 @@ impl Primitive for Cube {
             }
 
             //Get normal of intersection point
+            //t1 is bln t2 is trf
             let normal = if tmin == t1.x {
-                Vector3::new(1.0, 0.0, 0.0)
+                Vector3::new(-1.0, 0.0, 0.0)
             } else if tmin == t1.y {
                 Vector3::new(0.0, -1.0, 0.0)
             } else if tmin == t1.z {
-                Vector3::new(0.0, 0.0, 1.0)
+                Vector3::new(0.0, 0.0, -1.0)
             } else if tmin == t2.x {
-                Vector3::new(-1.0, 0.0, 0.0)
+                Vector3::new(1.0, 0.0, 0.0)
             } else if tmin == t2.y {
                 Vector3::new(0.0, 1.0, 0.0)
             } else {
-                Vector3::new(0.0, 0.0, -1.0)
+                Vector3::new(0.0, 0.0, 1.0)
             };
 
             Some(Intersection {

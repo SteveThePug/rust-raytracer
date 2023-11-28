@@ -21,8 +21,18 @@ scene.addLight("ambient", light);
 
 let tri = TriangleUnit();
 let tri_node = Node(tri, material);
-tri_node.active(true);
+tri_node.active(false);
 scene.addNode("tri", tri_node);
+
+let circle = CircleUnit();
+let circle_node = Node(circle, material);
+circle_node.active(false);
+scene.addNode("circle", circle_node);
+
+let cone = ConeUnit();
+let cone_node = Node(cone, material);
+cone_node.active(true);
+scene.addNode("cone", cone_node);
 
 
 let sphere = SphereUnit();
@@ -39,10 +49,10 @@ ground_node.scale(scale,scale,scale);
 ground_node.active(false);
 scene.addNode("ground", ground_node);
 
-// let mesh = Mesh("obj/cat.obj");
-// let mesh_node = Node(mesh, material);
-// mesh_node.active(false);
-// scene.addNode("mesh", mesh_node);
+let mesh = Mesh("obj/cat.obj");
+let mesh_node = Node(mesh, material);
+mesh_node.active(false);
+scene.addNode("mesh", mesh_node);
 
 
 scene

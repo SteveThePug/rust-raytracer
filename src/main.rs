@@ -2,7 +2,7 @@ use crate::state::run;
 use error_iter::ErrorIter;
 
 const EPSILON: f64 = 1e-8;
-const INFINITY: f64 = 1e-10;
+const INFINITY: f64 = 1e10;
 
 use log::error;
 use std::env;
