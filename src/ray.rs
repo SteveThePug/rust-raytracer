@@ -1,8 +1,27 @@
-use crate::{primitive::Intersection, raytracer::phong_shade_point, scene::Scene};
+use crate::{node::Node, scene::Scene};
 use nalgebra::{Matrix4, Point3, Vector3};
 
-#[derive(Clone)]
+// INTERSECTION -----------------------------------------------------------------
+pub struct Intersection {
+    // Information about an intersection
+    pub point: Point3<f64>,
+    pub normal: Vector3<f64>,
+    pub distance: f64,
+}
+impl Intersection {
+    pub fn transform(&self, trans: &Matrix4<f64>, inv_trans: &Matrix4<f64>) -> Intersection {
+        let point = trans.transform_point(&self.point);
+        let normal = inv_trans.transpose().transform_vector(&self.normal);
+        Intersection {
+            point,
+            normal,
+            distance: self.distance,
+        }
+    }
+}
+
 // Ray struct represents a ray in 3D space with a starting point 'a' and a direction 'b'
+#[derive(Clone)]
 pub struct Ray {
     pub a: Point3<f64>,
     pub b: Vector3<f64>,
@@ -35,6 +54,9 @@ impl Ray {
         let mut closest_node = None;
 
         for (_, node) in &scene.nodes {
+            if !node.active {
+                continue;
+            }
             // Transform ray into local model cordinates
             let ray = self.transform(&node.inv_model);
             // Check bounding box intersection
@@ -57,12 +79,94 @@ impl Ray {
                 //Inverse transform back to world coords
                 let node = closest_node.unwrap();
                 let intersect = intersect.transform(&node.model, &node.inv_model);
-                Some(phong_shade_point(&scene, &intersect)) // If there is an intersection, shade it
+                Some(Ray::phong_shade_point(&scene, &self, &node, &intersect)) // If there is an intersection, shade it
             }
             None => None, // If there is no intersection, return None
         }
     }
 
+    // Function to shade a point in the scene using Phong shading model
+    pub fn phong_shade_point(
+        scene: &Scene,
+        ray: &Ray,
+        node: &Node,
+        intersect: &Intersection,
+    ) -> Vector3<u8> {
+        let point = &intersect.point;
+        let normal = &intersect.normal;
+        let incidence = &ray.b;
+
+        let material = &node.material;
+        let kd = &material.kd;
+        let ks = &material.ks;
+        let shininess = material.shininess;
+
+        // Point to camera
+        let to_camera = -incidence;
+
+        // Compute the ambient light component and set it as base colour
+        let mut colour = Vector3::zeros();
+
+        for (_, light) in &scene.lights {
+            if !light.active {
+                continue;
+            }
+            if light.ambient {
+                colour += light.colour;
+                continue;
+            }
+
+            // Point to light
+            let to_light = light.position - point;
+            let light_distance = to_light.norm() as f32;
+            let to_light = to_light.normalize();
+
+            // let to_light_ray = Ray::new(point.clone() + 0.0001 * normal, to_light);
+            // if to_light_ray.light_blocked(scene) {
+            // continue;
+            // }
+
+            // Diffuse component
+            let n_dot_l = normal.dot(&to_light).max(0.0) as f32;
+            let diffuse = n_dot_l * kd;
+            // Specular component
+            let mut specular = Vector3::zeros();
+            if n_dot_l > 0.0 {
+                // Halfway vector.
+                let h = to_camera + to_light.normalize();
+                let n_dot_h = normal.dot(&h).max(0.0) as f32;
+                specular = ks * n_dot_h.powf(shininess);
+            }
+            // Compute light falloff
+            let falloff = 1.0
+                / (1.0
+                    + light.falloff[0]
+                    + light.falloff[1] * light_distance
+                    + light.falloff[2] * light_distance.powi(2));
+
+            let light_intensity = light.colour.component_mul(&(diffuse + specular)) * falloff;
+            colour += &light_intensity;
+        }
+
+        colour *= 255.0;
+        let (r, g, b) = (colour.x as u8, colour.y as u8, colour.z as u8);
+        Vector3::new(r, g, b)
+    }
+
+    pub fn light_blocked(&mut self, scene: &Scene) -> bool {
+        for (_, node) in &scene.nodes {
+            if !node.active {
+                continue;
+            }
+            self.transform(&node.inv_model);
+            if node.primitive.intersect_bounding_box(&self) {
+                if node.primitive.intersect_ray(&self).is_some() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
     // Return a transformed version of the ray
     pub fn transform(&self, trans: &Matrix4<f64>) -> Ray {
         Ray {
