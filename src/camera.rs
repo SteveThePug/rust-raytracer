@@ -27,7 +27,7 @@ impl Camera {
 
     /// Create a unit camera with default parameters
     pub fn unit() -> Self {
-        let eye = Point3::new(0.0, 0.0, 2.0);
+        let eye = Point3::new(2.0, 2.0, 2.0);
         let target = Point3::new(0.0, 0.0, 0.0);
         let up = Vector3::new(0.0, 1.0, 0.0);
         Camera::new(eye, target, up)

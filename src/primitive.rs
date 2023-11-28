@@ -158,7 +158,6 @@ impl Primitive for Sphere {
         let dir = &ray.b;
 
         let l = pos - self.position;
-
         let a = dir.dot(dir);
         let b = 2.0 * l.dot(dir);
         let c = l.dot(&l) - self.radius * self.radius;
@@ -923,116 +922,6 @@ impl Primitive for Mesh {
     }
 }
 
-// STEINER -----------------------------------------------------------------
-#[derive(Clone)]
-pub struct SteinerSurface {
-    material: Rc<Material>,
-    bounding_box: BoundingBox,
-}
-
-impl SteinerSurface {
-    pub fn new(material: Rc<Material>) -> Rc<dyn Primitive> {
-        // I need to find the bounding box for this shape
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
-        Rc::new(SteinerSurface {
-            material,
-            bounding_box: BoundingBox { bln, trf },
-        })
-    }
-}
-
-impl Primitive for SteinerSurface {
-    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        let a = ray.a.x;
-        let b = ray.b.x;
-        let c = ray.a.y;
-        let d = ray.b.y;
-        let e = ray.a.z;
-        let f = ray.b.z;
-
-        let t0 = a.powf(2.0) * c.powf(2.0)
-            + a.powf(2.0) * e.powf(2.0)
-            + c.powf(2.0) * e.powf(2.0)
-            + c * e.powf(2.0);
-        let t1 = 2.0 * a * b * c.powf(2.0)
-            + 2.0 * a.powf(2.0) * c * d
-            + 2.0 * a * b * e.powf(2.0)
-            + 2.0 * c * d * e.powf(2.0)
-            + 2.0 * a.powf(2.0) * e * f
-            + 2.0 * c.powf(2.0) * e * f
-            + d * e.powf(2.0)
-            + 2.0 * c * e * f.powf(2.0);
-        let t2 = b.powf(2.0) * c.powf(2.0)
-            + 4.0 * a * b * c * d
-            + a.powf(2.0) * d.powf(2.0)
-            + b.powf(2.0) * e.powf(2.0)
-            + d.powf(2.0) * e.powf(2.0)
-            + 4.0 * a * b * e * f
-            + 4.0 * c * d * e * f
-            + a.powf(2.0) * f.powf(2.0)
-            + c.powf(2.0) * f.powf(2.0)
-            + 2.0 * d * e * f
-            + c * f.powf(2.0);
-        let t3 = 2.0 * b.powf(2.0) * c * d
-            + 2.0 * a * b * d.powf(2.0)
-            + 2.0 * b.powf(2.0) * e * f
-            + 2.0 * d.powf(2.0) * e * f
-            + 2.0 * a * b * f.powf(2.0)
-            + 2.0 * c * d * f.powf(2.0)
-            + d.powf(2.0) * f.powf(2.0);
-        let t4 = b.powf(2.0) * d.powf(2.0) + b.powf(2.0) * f.powf(2.0) + d.powf(2.0) * f.powf(2.0);
-
-        let t = match find_roots_quartic(t4, t3, t2, t1, t0) {
-            Roots::No(arr) => smallest_non_zero(&arr),
-            Roots::One(arr) => smallest_non_zero(&arr),
-            Roots::Two(arr) => smallest_non_zero(&arr),
-            Roots::Three(arr) => smallest_non_zero(&arr),
-            Roots::Four(arr) => smallest_non_zero(&arr),
-        };
-
-        let t = match t {
-            Some(t) => t,
-            None => return None,
-        };
-
-        //Now we have the smallest non-zero t
-        let point = ray.at_t(t);
-        let (x, y, z) = (point.x, point.y, point.z);
-        let normal = Vector3::new(
-            2.0 * x * y * y + 2.0 * x * z * z + y * z,
-            2.0 * x * x * y + 2.0 * z * z * y + x * z,
-            2.0 * x * x * z + 2.0 * z * y * y + x * y,
-        )
-        .normalize();
-
-        Some(Intersection {
-            point,
-            normal,
-            incidence: ray.b,
-            material: Rc::clone(&self.material),
-            distance: t,
-        })
-    }
-
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
-    }
-
-    fn get_material(&self) -> Rc<Material> {
-        Rc::clone(&self.material)
-    }
-}
-
-fn smallest_non_zero(arr: &[f64]) -> Option<f64> {
-    for &num in arr {
-        if num >= 0.0 {
-            return Some(num);
-        }
-    }
-    None
-}
-
 // TORUS -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Torus {
@@ -1066,19 +955,20 @@ impl Primitive for Torus {
         let f = ray.b.z;
         let r1 = self.inner_rad;
         let r2 = self.outer_rad;
-        let t0 = r2.powf(2.0).powf(2.0) - 2.0 * r2.powf(2.0) * a.powf(2.0) + a.powf(2.0).powf(2.0)
+
+        let t0 = r2.powf(4.0) - 2.0 * r2.powf(2.0) * a.powf(2.0) + a.powf(4.0)
             - 2.0 * r2.powf(2.0) * c.powf(2.0)
             + 2.0 * a.powf(2.0) * c.powf(2.0)
-            + c.powf(2.0).powf(2.0)
+            + c.powf(4.0)
             + 2.0 * r2.powf(2.0) * e.powf(2.0)
             + 2.0 * a.powf(2.0) * e.powf(2.0)
             + 2.0 * c.powf(2.0) * e.powf(2.0)
-            + e.powf(2.0).powf(2.0)
+            + e.powf(4.0)
             - 2.0 * r2.powf(2.0) * r1.powf(2.0)
             - 2.0 * a.powf(2.0) * r1.powf(2.0)
             - 2.0 * c.powf(2.0) * r1.powf(2.0)
             - 2.0 * e.powf(2.0) * r1.powf(2.0)
-            + r1.powf(2.0).powf(2.0);
+            + r1.powf(4.0);
         let t1 = -4.0 * r2.powf(2.0) * a * b + 4.0 * a.powf(3.0) * b + 4.0 * a * b * c.powf(2.0)
             - 4.0 * r2.powf(2.0) * c * d
             + 4.0 * a.powf(2.0) * c * d
@@ -1142,12 +1032,11 @@ impl Primitive for Torus {
         //Now we have the smallest non-zero t
         let point = ray.at_t(t);
         let (x, y, z) = (point.x, point.y, point.z);
-        let dx = 4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * r2
-            - 8.0 * (x.powf(2.0) + y.powf(2.0)) * r2;
-        let dy =
-            -4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * r1;
-        let dz = -8.0 * r2.powf(2.0) * x
+        let dx = -8.0 * r2.powf(2.0) * x
             + 4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * x;
+        let dy = -8.0 * r2.powf(2.0) * y
+            + 4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * y;
+        let dz = 4.0 * (r2.powf(2.0) - r1.powf(2.0) + x.powf(2.0) + y.powf(2.0) + z.powf(2.0)) * z;
         let normal = Vector3::new(dx, dy, dz).normalize();
 
         Some(Intersection {
@@ -1243,4 +1132,550 @@ impl Primitive for Gnonom {
     fn get_material(&self) -> Rc<Material> {
         self.material.clone()
     }
+}
+
+// CROSS CAP ---------
+#[derive(Clone)]
+pub struct CrossCap {
+    material: Rc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl CrossCap {
+    pub fn new(material: Rc<Material>) -> Rc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Rc::new(CrossCap {
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for CrossCap {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+
+        let t0 = a.powf(2.0) * c.powf(2.0) + a.powf(2.0) * e.powf(2.0)
+            - e.powf(4.0)
+            - 2.0 * a * c.powf(2.0)
+            - a * e.powf(2.0)
+            + c.powf(2.0);
+        let t1 = 2.0 * a * b * c.powf(2.0)
+            + 2.0 * a.powf(2.0) * c * d
+            + 2.0 * a * b * e.powf(2.0)
+            + 2.0 * a.powf(2.0) * e * f
+            - 4.0 * e.powf(3.0) * f
+            - 2.0 * b * c.powf(2.0)
+            - 4.0 * a * c * d
+            - b * e.powf(2.0)
+            - 2.0 * a * e * f
+            + 2.0 * c * d;
+        let t2 = b.powf(2.0) * c.powf(2.0)
+            + 4.0 * a * b * c * d
+            + a.powf(2.0) * d.powf(2.0)
+            + b.powf(2.0) * e.powf(2.0)
+            + 4.0 * a * b * e * f
+            + a.powf(2.0) * f.powf(2.0)
+            - 6.0 * e.powf(2.0) * f.powf(2.0)
+            - 4.0 * b * c * d
+            - 2.0 * a * d.powf(2.0)
+            - 2.0 * b * e * f
+            - a * f.powf(2.0)
+            + d.powf(2.0);
+        let t3 = 2.0 * b.powf(2.0) * c * d
+            + 2.0 * a * b * d.powf(2.0)
+            + 2.0 * b.powf(2.0) * e * f
+            + 2.0 * a * b * f.powf(2.0)
+            - 4.0 * e * f.powf(3.0)
+            - 2.0 * b * d.powf(2.0)
+            - b * f.powf(2.0);
+        let t4 = b.powf(2.0) * d.powf(2.0) + b.powf(2.0) * f.powf(2.0) - f.powf(4.0);
+
+        let t = match match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        } {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = 2.0 * x * y.powf(2.0) + 2.0 * x * z.powf(2.0) - 2.0 * y.powf(2.0) - z.powf(2.0);
+        let dy = 2.0 * x.powf(2.0) * y - 4.0 * x * y + 2.0 * y;
+        let dz = 2.0 * x.powf(2.0) * z - 4.0 * z.powf(3.0) - 2.0 * x * z;
+        let normal = Vector3::new(dx, dy, dz).normalize();
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Rc::clone(&self.material),
+            distance: t,
+        })
+    }
+
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
+    }
+}
+
+// CROSS CAP 2 ---------
+#[derive(Clone)]
+pub struct CrossCap2 {
+    p: f64,
+    q: f64,
+    material: Rc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl CrossCap2 {
+    pub fn new(p: f64, q: f64, material: Rc<Material>) -> Rc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Rc::new(CrossCap2 {
+            p,
+            q,
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for CrossCap2 {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+        let (p, q) = (self.p, self.q);
+
+        let t0 = 2.0 * a * a * e
+            + 2.0 * c * c * e
+            + a * a * a * a / p
+            + a * a * c * c / p
+            + a * a * e * e / p
+            + a * a * c * c / q
+            + c * c * c * c / q
+            + c * c * e * e / q;
+        let t1 = 4.0 * a * b * e
+            + 4.0 * c * d * e
+            + 2.0 * a * a * f
+            + 2.0 * c * c * f
+            + 4.0 * a * a * a * b / p
+            + 2.0 * a * b * c * c / p
+            + 2.0 * a * a * c * d / p
+            + 2.0 * a * b * e * e / p
+            + 2.0 * a * a * e * f / p
+            + 2.0 * a * b * c * c / q
+            + 2.0 * a * a * c * d / q
+            + 4.0 * c * c * c * d / q
+            + 2.0 * c * d * e * e / q
+            + 2.0 * c * c * e * f / q;
+        let t2 = 2.0 * b * b * e
+            + 2.0 * d * d * e
+            + 4.0 * a * b * f
+            + 4.0 * c * d * f
+            + 6.0 * a * a * b * b / p
+            + b * b * c * c / p
+            + 4.0 * a * b * c * d / p
+            + a * a * d * d / p
+            + b * b * e * e / p
+            + 4.0 * a * b * e * f / p
+            + a * a * f * f / p
+            + b * b * c * c / q
+            + 4.0 * a * b * c * d / q
+            + a * a * d * d / q
+            + 6.0 * c * c * d * d / q
+            + d * d * e * e / q
+            + 4.0 * c * d * e * f / q
+            + c * c * f * f / q;
+        let t3 = 2.0 * b * b * f
+            + 2.0 * d * d * f
+            + 4.0 * a * b * b * b / p
+            + 2.0 * b * b * c * d / p
+            + 2.0 * a * b * d * d / p
+            + 2.0 * b * b * e * f / p
+            + 2.0 * a * b * f * f / p
+            + 2.0 * b * b * c * d / q
+            + 2.0 * a * b * d * d / q
+            + 4.0 * c * d * d * d / q
+            + 2.0 * d * d * e * f / q
+            + 2.0 * c * d * f * f / q;
+        let t4 = b * b * b * b / p
+            + b * b * d * d / p
+            + b * b * f * f / p
+            + b * b * d * d / q
+            + d * d * d * d / q
+            + d * d * f * f / q;
+        let t = match match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        } {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx =
+            2.0 * x * (x * (2.0 / p) + y * (2.0 / q)) + 4.0 * x * z + 2.0 * (x * (x + y + z) / p);
+        let dy =
+            2.0 * (x * (2.0 / p) + y * (2.0 / q)) * y + 4.0 * y * z + 2.0 * (y * (x + y + z) / q);
+        let dz = 2.0 * x + 2.0 * y + 2.0 * (x * (2.0 / p) + y * (2.0 / q)) * z;
+        let normal = Vector3::new(dx, dy, dz).normalize();
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Rc::clone(&self.material),
+            distance: t,
+        })
+    }
+
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
+    }
+}
+
+//  Steiner  ---------
+#[derive(Clone)]
+pub struct Steiner {
+    material: Rc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl Steiner {
+    pub fn new(material: Rc<Material>) -> Rc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Rc::new(Steiner {
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for Steiner {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+        let t0 = a.powf(2.0) * c.powf(2.0) - a.powf(2.0) * e.powf(2.0) + c.powf(2.0) * e.powf(2.0)
+            - a * c * e;
+        let t1 = 2.0 * a * b * c.powf(2.0) + 2.0 * a.powf(2.0) * c * d - 2.0 * a * b * e.powf(2.0)
+            + 2.0 * c * d * e.powf(2.0)
+            - 2.0 * a.powf(2.0) * e * f
+            + 2.0 * c.powf(2.0) * e * f
+            - b * c * e
+            - a * d * e
+            - a * c * f;
+        let t2 = b.powf(2.0) * c.powf(2.0) + 4.0 * a * b * c * d + a.powf(2.0) * d.powf(2.0)
+            - b.powf(2.0) * e.powf(2.0)
+            + d.powf(2.0) * e.powf(2.0)
+            - 4.0 * a * b * e * f
+            + 4.0 * c * d * e * f
+            - a.powf(2.0) * f.powf(2.0)
+            + c.powf(2.0) * f.powf(2.0)
+            - b * d * e
+            - b * c * f
+            - a * d * f;
+        let t3 = 2.0 * b.powf(2.0) * c * d + 2.0 * a * b * d.powf(2.0) - 2.0 * b.powf(2.0) * e * f
+            + 2.0 * d.powf(2.0) * e * f
+            - 2.0 * a * b * f.powf(2.0)
+            + 2.0 * c * d * f.powf(2.0)
+            - b * d * f;
+        let t4 = b.powf(2.0) * d.powf(2.0) - b.powf(2.0) * f.powf(2.0) + d.powf(2.0) * f.powf(2.0);
+
+        let t = match match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        } {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = 2.0 * x * y.powf(2.0) - 2.0 * x * z.powf(2.0) - y * z;
+        let dy = 2.0 * x.powf(2.0) * y + 2.0 * y * z.powf(2.0) - x * z;
+        let dz = -2.0 * x.powf(2.0) * z + 2.0 * y.powf(2.0) * z - x * y;
+        let normal = Vector3::new(dx, dy, dz).normalize();
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Rc::clone(&self.material),
+            distance: t,
+        })
+    }
+
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
+    }
+}
+
+//  Steiner 2 ---------
+#[derive(Clone)]
+pub struct Steiner2 {
+    material: Rc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl Steiner2 {
+    pub fn new(material: Rc<Material>) -> Rc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Rc::new(Steiner2 {
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for Steiner2 {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+
+        let t0 = a.powi(2) * c.powi(2) + a.powi(2) * e.powi(2)
+            - e.powi(4)
+            - 2.0 * a * c.powi(2)
+            - a * e.powi(2)
+            + c.powi(2);
+        let t1 = 2.0 * a * b * c.powi(2)
+            + 2.0 * a.powi(2) * c * d
+            + 2.0 * a * b * e.powi(2)
+            + 2.0 * a.powi(2) * e * f
+            - 4.0 * e.powi(3) * f
+            - 2.0 * b * c.powi(2)
+            - 4.0 * a * c * d
+            - b * e.powi(2)
+            - 2.0 * a * e * f
+            + 2.0 * c * d;
+        let t2 = b.powi(2) * c.powi(2)
+            + 4.0 * a * b * c * d
+            + a.powi(2) * d.powi(2)
+            + b.powi(2) * e.powi(2)
+            + 4.0 * a * b * e * f
+            + a.powi(2) * f.powi(2)
+            - 6.0 * e.powi(2) * f.powi(2)
+            - 4.0 * b * c * d
+            - 2.0 * a * d.powi(2)
+            - 2.0 * b * e * f
+            - a * f.powi(2)
+            + d.powi(2);
+        let t3 = 2.0 * b.powi(2) * c * d
+            + 2.0 * a * b * d.powi(2)
+            + 2.0 * b.powi(2) * e * f
+            + 2.0 * a * b * f.powi(2)
+            - 4.0 * e * f.powi(3)
+            - 2.0 * b * d.powi(2)
+            - b * f.powi(2);
+        let t4 = b.powi(2) * d.powi(2) + b.powi(2) * f.powi(2) - f.powi(4);
+
+        let t = match match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        } {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = 2.0 * x * y.powi(2) + 2.0 * x * z.powi(2) - 2.0 * y.powi(2) - z.powi(2);
+        let dy = 2.0 * x.powi(2) * y - 4.0 * x * y + 2.0 * y;
+        let dz = 2.0 * x.powi(2) * z - 4.0 * z.powi(3) - 2.0 * x * z;
+        let normal = Vector3::new(dx, dy, dz).normalize();
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Rc::clone(&self.material),
+            distance: t,
+        })
+    }
+
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
+    }
+}
+
+//  Roman  ---------
+#[derive(Clone)]
+pub struct Roman {
+    k: f64,
+    material: Rc<Material>,
+    bounding_box: BoundingBox,
+}
+
+impl Roman {
+    pub fn new(k: f64, material: Rc<Material>) -> Rc<dyn Primitive> {
+        // I need to find the bounding box for this shape
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        Rc::new(Roman {
+            k,
+            material,
+            bounding_box: BoundingBox { bln, trf },
+        })
+    }
+}
+
+impl Primitive for Roman {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let a = ray.a.x;
+        let b = ray.b.x;
+        let c = ray.a.y;
+        let d = ray.b.y;
+        let e = ray.a.z;
+        let f = ray.b.z;
+        let k = self.k;
+
+        let t0 = a.powf(4.0)
+            + 2.0 * a.powf(2.0) * c.powf(2.0)
+            + c.powf(4.0)
+            + 2.0 * a.powf(2.0) * e.powf(2.0)
+            + 2.0 * c.powf(2.0) * e.powf(2.0)
+            + e.powf(4.0)
+            - 2.0 * a.powf(2.0) * k.powf(2.0)
+            - 2.0 * c.powf(2.0) * k.powf(2.0)
+            - 2.0 * e.powf(2.0) * k.powf(2.0)
+            + k.powf(4.0);
+        let t1 = 4.0 * a.powf(3.0) * b
+            + 4.0 * a * b * c.powf(2.0)
+            + 4.0 * a.powf(2.0) * c * d
+            + 4.0 * c.powf(3.0) * d
+            + 4.0 * a * b * e.powf(2.0)
+            + 4.0 * c * d * e.powf(2.0)
+            + 4.0 * a.powf(2.0) * e * f
+            + 4.0 * c.powf(2.0) * e * f
+            + 4.0 * e.powf(3.0) * f
+            - 4.0 * a * b * k.powf(2.0)
+            - 4.0 * c * d * k.powf(2.0)
+            - 4.0 * e * f * k.powf(2.0);
+        let t2 = 6.0 * a.powf(2.0) * b.powf(2.0)
+            + 2.0 * b.powf(2.0) * c.powf(2.0)
+            + 8.0 * a * b * c * d
+            + 2.0 * a.powf(2.0) * d.powf(2.0)
+            + 6.0 * c.powf(2.0) * d.powf(2.0)
+            + 2.0 * b.powf(2.0) * e.powf(2.0)
+            + 2.0 * d.powf(2.0) * e.powf(2.0)
+            + 8.0 * a * b * e * f
+            + 8.0 * c * d * e * f
+            + 2.0 * a.powf(2.0) * f.powf(2.0)
+            + 2.0 * c.powf(2.0) * f.powf(2.0)
+            + 6.0 * e.powf(2.0) * f.powf(2.0)
+            - 2.0 * b.powf(2.0) * k.powf(2.0)
+            - 2.0 * d.powf(2.0) * k.powf(2.0)
+            - 2.0 * f.powf(2.0) * k.powf(2.0);
+        let t3 = 4.0 * a * b.powf(3.0)
+            + 4.0 * b.powf(2.0) * c * d
+            + 4.0 * a * b * d.powf(2.0)
+            + 4.0 * c * d.powf(3.0)
+            + 4.0 * b.powf(2.0) * e * f
+            + 4.0 * d.powf(2.0) * e * f
+            + 4.0 * a * b * f.powf(2.0)
+            + 4.0 * c * d * f.powf(2.0)
+            + 4.0 * e * f.powf(3.0);
+        let t4 = b.powf(4.0)
+            + 2.0 * b.powf(2.0) * d.powf(2.0)
+            + d.powf(4.0)
+            + 2.0 * b.powf(2.0) * f.powf(2.0)
+            + 2.0 * d.powf(2.0) * f.powf(2.0)
+            + f.powf(4.0);
+        let t = match match find_roots_quartic(t4, t3, t2, t1, t0) {
+            Roots::No(arr) => smallest_non_zero(&arr),
+            Roots::One(arr) => smallest_non_zero(&arr),
+            Roots::Two(arr) => smallest_non_zero(&arr),
+            Roots::Three(arr) => smallest_non_zero(&arr),
+            Roots::Four(arr) => smallest_non_zero(&arr),
+        } {
+            Some(t) => t,
+            None => return None,
+        };
+
+        let point = ray.at_t(t);
+        let (x, y, z) = (point.x, point.y, point.z);
+        let dx = -4.0 * (k.powf(2.0) - x.powf(2.0) - y.powf(2.0) - z.powf(2.0)) * x;
+        let dy = -4.0 * (k.powf(2.0) - x.powf(2.0) - y.powf(2.0) - z.powf(2.0)) * y;
+        let dz = -4.0 * (k.powf(2.0) - x.powf(2.0) - y.powf(2.0) - z.powf(2.0)) * z;
+        let normal = Vector3::new(dx, dy, dz).normalize();
+
+        Some(Intersection {
+            point,
+            normal,
+            incidence: ray.b,
+            material: Rc::clone(&self.material),
+            distance: t,
+        })
+    }
+
+    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
+        self.bounding_box.intersect_bounding_box(ray)
+    }
+
+    fn get_material(&self) -> Rc<Material> {
+        Rc::clone(&self.material)
+    }
+}
+
+fn smallest_non_zero(arr: &[f64]) -> Option<f64> {
+    for &num in arr {
+        if num >= 0.0 {
+            return Some(num);
+        }
+    }
+    None
 }

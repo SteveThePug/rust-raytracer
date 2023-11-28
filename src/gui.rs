@@ -414,14 +414,23 @@ pub fn init_engine() -> Engine {
         .register_fn("Cube", Cube::new)
         .register_fn("CubeUnit", Cube::unit);
     engine
-        .register_type::<SteinerSurface>()
-        .register_fn("Steiner", SteinerSurface::new);
+        .register_type::<Steiner>()
+        .register_fn("Steiner", Steiner::new);
+    engine
+        .register_type::<Steiner2>()
+        .register_fn("Steiner2", Steiner2::new);
+    engine
+        .register_type::<Roman>()
+        .register_fn("Roman", Roman::new);
+    engine
+        .register_type::<CrossCap>()
+        .register_fn("CrossCap", CrossCap::new);
+    engine
+        .register_type::<CrossCap2>()
+        .register_fn("CrossCap2", CrossCap2::new);
     engine
         .register_type::<Torus>()
         .register_fn("Torus", Torus::new);
-    engine
-        .register_type::<Mesh>()
-        .register_fn("Mesh", Mesh::from_file);
     engine
         .register_type::<Gnonom>()
         .register_fn("Gnonom", Gnonom::new);

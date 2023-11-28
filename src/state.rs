@@ -224,11 +224,13 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         }
 
         match event {
-            Event::WindowEvent { event, .. } => {
-                if let Err(_e) = handle_window_event(event, control_flow, &mut state) {
-                    *control_flow = ControlFlow::Exit;
-                }
-            }
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::Resized(size) => state.resize(&size).expect("Window Resize Error"),
+                WindowEvent::KeyboardInput { input, .. } => state.keyboard_input(&input),
+                WindowEvent::MouseInput { button, .. } => state.mouse_input(&button),
+                _ => {}
+            },
 
             Event::RedrawRequested(_) => {
                 if let Err(_e) = state.render() {
@@ -254,19 +256,4 @@ fn create_pixels(window: &Window) -> Pixels {
     let window_size = window.inner_size();
     let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, window);
     Pixels::new(1, 1, surface_texture).unwrap()
-}
-
-fn handle_window_event(
-    event: WindowEvent,
-    control_flow: &mut ControlFlow,
-    state: &mut State,
-) -> Result<(), Box<dyn Error>> {
-    match event {
-        WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-        WindowEvent::Resized(size) => state.resize(&size)?,
-        WindowEvent::KeyboardInput { input, .. } => state.keyboard_input(&input),
-        WindowEvent::MouseInput { button, .. } => state.mouse_input(&button),
-        _ => {}
-    };
-    Ok(())
 }

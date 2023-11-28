@@ -1,3 +1,4 @@
+
 let scene = Scene();
 
 let distance = 3.0;
@@ -27,8 +28,8 @@ scene.addLight("red", light);
 let material = Material(V(0.2,0.2,0.2), V(0.2, 0.8, 0.8), 10.0);
 scene.addMaterial("bluegreen", material);
 
-let sphere = Steiner( material);
-let sphere_node = Node(sphere);
- scene.addNode("sphere", sphere_node);
+let mesh = Mesh("obj/cow.obj", material);
+let mesh_node = Node(mesh);
+scene.addNode("mesh", mesh_node);
 
 scene
