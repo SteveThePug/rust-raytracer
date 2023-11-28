@@ -4,13 +4,14 @@ version = "0.1.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+
 [dependencies]
 cfg-if = "1"
 env_logger = "0.10"
 log = "0.4"
 pollster = "0.3"
 anyhow = "1.0"
-nalgebra = "0.32.3"
+nalgebra = {version = "0.32.3"}
 roots = "0.0.8"
 
 imgui = "0.11"

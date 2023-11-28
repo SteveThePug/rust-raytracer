@@ -1,19 +1,21 @@
 use crate::state::run;
 use error_iter::ErrorIter;
 
-const EPSILON: f64 = 1e-6;
+const EPSILON: f64 = 1e-8;
 const INFINITY: f64 = 1e-10;
 
 use log::error;
 use std::env;
 use std::error::Error;
 
+mod bvh;
 mod camera;
 mod gui;
 mod light;
+mod material;
+mod node;
 mod primitive;
 mod ray;
-mod raytracer;
 mod scene;
 mod state;
 

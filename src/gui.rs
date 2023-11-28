@@ -24,12 +24,12 @@ const RAYS_MIN: i32 = 100;
 const RAYS_MAX: i32 = 10000;
 
 //MATERIAL CONSTANTS
-// const MIN_D: f32 = 0.0;
-// const MIN_S: f32 = 0.0;
-// const MIN_SHINE: f32 = 0.0;
-// const MAX_D: f32 = 1.0;
-// const MAX_S: f32 = 1.0;
-// const MAX_SHINE: f32 = 50.0;
+const MIN_D: f32 = 0.0;
+const MIN_S: f32 = 0.0;
+const MIN_SHINE: f32 = 0.0;
+const MAX_D: f32 = 1.0;
+const MAX_S: f32 = 1.0;
+const MAX_SHINE: f32 = 50.0;
 
 //TRANSFORMATION CONSTANTS
 const MIN_COLOUR: f32 = 0.0;
@@ -287,17 +287,17 @@ impl Gui {
                 }
             }
             // Edit materials
-            // if let Some(_t) = ui.tree_node("Materials") {
-            //     for (label, material) in &mut self.scene.materials {
-            //         if let Some(_t) = ui.tree_node(label) {
-            //             ui.slider_config("ks", MIN_D, MIN_D)
-            //                 .build_array(material.ks.as_mut_slice());
-            //             ui.slider_config("kd", MIN_S, MAX_S)
-            //                 .build_array(material.kd.as_mut_slice());
-            //             ui.slider("fov", MIN_SHINE, MAX_SHINE, &mut material.shininess);
-            //         }
-            //     }
-            // }
+            if let Some(_t) = ui.tree_node("Materials") {
+                for (label, material) in &mut self.scene.materials {
+                    if let Some(_t) = ui.tree_node(label) {
+                        ui.slider_config("ks", MIN_D, MAX_D)
+                            .build_array(material.ks.as_mut_slice());
+                        ui.slider_config("kd", MIN_S, MAX_S)
+                            .build_array(material.kd.as_mut_slice());
+                        ui.slider("shine", MIN_SHINE, MAX_SHINE, &mut material.shininess);
+                    }
+                }
+            }
             //Edit color, position and falloff of lights
             if let Some(_t) = ui.tree_node("Lights") {
                 for (label, light) in &mut self.scene.lights {
