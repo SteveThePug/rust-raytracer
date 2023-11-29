@@ -6,7 +6,7 @@ use crate::{
 
 #[allow(dead_code)]
 use nalgebra::{distance, Point3, Vector3};
-use roots::{find_roots_quadratic, find_roots_quartic, FloatType, Roots};
+use roots::{find_roots_quadratic, find_roots_quartic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::rc::Rc;
@@ -44,7 +44,7 @@ impl Sphere {
 
 impl Primitive for Sphere {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        let pos = &ray.a;
+        let pos = ray.a;
         let dir = &ray.b;
 
         let l = pos - self.position;

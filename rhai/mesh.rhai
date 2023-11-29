@@ -10,11 +10,14 @@ scene.addCamera("Cam", camera);
 
 let falloff = V(0.0,0.0,0.0);
 let light = Light(P(6.0,6.0,6.0), V(0.4,0.4,0.4), falloff);
+light.active(false);
 scene.addLight("white", light);
-// let light = Light(P(2.0,0.0,0.0), V(0.0,1.0,0.0), V(0.1, 0.01, 0.001));
-// scene.addLight("green", light);
-// let light = Light(P(-2.0,0.0,0.0), V(1.0,0.0,0.0), V(0.1, 0.01, 0.001));
-// scene.addLight("red", light);
+let light = Light(P(2.0,0.0,0.0), V(0.0,1.0,0.0), V(0.1, 0.01, 0.001));
+light.active(false);
+scene.addLight("green", light);
+let light = Light(P(-2.0,0.0,0.0), V(1.0,0.0,0.0), V(0.1, 0.01, 0.001));
+light.active(false);
+scene.addLight("red", light);
 
 let light = Ambient(V(0.3,0.3,0.3));
 scene.addLight("ambient", light);
@@ -31,8 +34,13 @@ scene.addNode("circle", circle_node);
 
 let cone = ConeUnit();
 let cone_node = Node(cone, material);
-cone_node.active(true);
+cone_node.active(false);
 scene.addNode("cone", cone_node);
+
+let torus = Torus(0.5, 1.5);
+let torus_node = Node(torus, material);
+torus_node.active(true);
+scene.addNode("torus", torus_node);
 
 
 let sphere = SphereUnit();

@@ -6,8 +6,9 @@ use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
 use std::path::Path;
 
+use nalgebra::Vector3;
 use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::{random, thread_rng};
 
 use std::error::Error;
 
@@ -20,8 +21,10 @@ use winit::window::{Window, WindowBuilder};
 
 const START_WIDTH: i32 = 1200;
 const START_HEIGHT: i32 = 700;
-const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0x00];
-const PIXEL_CLEAR: [u8; 4] = [0x55, 0x00, 0x22, 0x00];
+const RAY_SAMPLES: i8 = 5;
+const RAY_RANDOMNESS: f64 = 100.0;
+const COLOUR_CLEAR: [u8; 4] = [0x22, 0x00, 0x11, 0x55];
+const PIXEL_CLEAR: [u8; 4] = [0x55, 0x00, 0x22, 0x55];
 
 pub const INIT_FILE: &str = "rhai/scene.rhai";
 pub const SAVE_FILE: &str = "img.png";
@@ -153,13 +156,26 @@ impl State {
                 None => break,
             };
             //Shade colour for selected ray
-            let rgba = match &self.rays[index].shade_ray(&self.scene, 0) {
-                Some(mut colour) => {
-                    colour = colour * 255.0;
-                    [colour.x as u8, colour.y as u8, colour.z as u8, 0xff]
-                }
-                None => PIXEL_CLEAR,
-            };
+            let mut colour = Vector3::zeros();
+            for _ in 0..RAY_SAMPLES {
+                let ray = &self.rays[index];
+                let point = ray.a;
+                let dir = ray.b;
+                let rx = (random::<f64>() - 0.5) / RAY_RANDOMNESS;
+                let ry = (random::<f64>() - 0.5) / RAY_RANDOMNESS;
+                let rz = (random::<f64>() - 0.5) / RAY_RANDOMNESS;
+                let nx = dir.x + rx;
+                let ny = dir.y + ry;
+                let nz = dir.z + rz;
+
+                let rand_ray = Ray::new(point, Vector3::new(nx, ny, nz));
+
+                if let Some(ray_colour) = rand_ray.shade_ray(&self.scene, 0) {
+                    colour += ray_colour;
+                };
+            }
+            colour = (colour / RAY_SAMPLES as f32) * 255.0;
+            let rgba = [colour.x as u8, colour.y as u8, colour.z as u8, 0xff];
             frame[index * 4..(index + 1) * 4].copy_from_slice(&rgba);
         }
         Ok(())

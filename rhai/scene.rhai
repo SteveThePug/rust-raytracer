@@ -17,13 +17,15 @@ scene.addCamera("-X Cam", camera);
 let material = Material(V(0.2,0.2,0.2), V(0.2, 0.8, 0.8), 10.0);
 scene.addMaterial("bluegreen", material);
 
-// let light = Light(P(0.0,7.0,0.0), V(0.0,0.0,1.0), V(0.1, 0.01, 0.001));
-// scene.addLight("blue", light);
+let light = Light(P(0.0,7.0,0.0), V(0.0,0.0,1.0), V(0.1, 0.01, 0.001));
+light.active(false);
+scene.addLight("blue", light);
 
-// let light = Light( P(2.0,7.0,0.0), V(0.0,1.0,0.0), V(0.1, 0.01, 0.001));
-// scene.addLight("green", light);
+let light = Light( P(2.0,7.0,0.0), V(0.0,1.0,0.0), V(0.1, 0.01, 0.001));
+light.active(false);
+scene.addLight("green", light);
 
-let light = Light( P(-2.0,7.0,0.0), V(1.0,0.0,0.0), V(0.1, 0.01, 0.001));
+let light = Light( P(2.0,7.0,2.0), V(1.0,0.0,0.0), V(0.1, 0.01, 0.001));
 scene.addLight("red", light);
 
 let light = Ambient(V(0.1,0.1,0.1));
@@ -41,7 +43,7 @@ let sphere_node = Node(sphere, material);
 for i in 0..6 {
     let sphere = Sphere(P(0.0,0.0,0.0), 2.0 );
      let sphere_node = Node(sphere, material);
-     sphere_node.translate(2.0*cos(i.to_float()), -4.0, 2.0*sin(i.to_float()));
+     sphere_node.translate(4.0*cos(i.to_float()), -4.0, 4.0*sin(i.to_float()));
      scene.addNode(i.to_string(), sphere_node);
  }
 // let child = sphere_node.child(sphere);
