@@ -449,9 +449,9 @@ pub fn init_engine() -> Engine {
     engine
         .register_type::<Mesh>()
         .register_fn("Mesh", Mesh::from_file);
-    engine
-        .register_type::<Rectangle>()
-        .register_fn("Rectange", Rectangle::new)
-        .register_fn("RectangleUnit", Rectangle::unit);
+    // engine
+    //     .register_type::<Rectangle>()
+    //     .register_fn("Rectange", Rectangle::new)
+    //     .register_fn("RectangleUnit", Rectangle::unit);
     engine
 }

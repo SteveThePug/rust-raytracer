@@ -13,7 +13,7 @@ use std::rc::Rc;
 // PRIMITIVE TRAIT -----------------------------------------------------------------
 pub trait Primitive {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection>;
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool;
+    fn get_aabb(&self) -> AABB;
 }
 
 // SPHERE -----------------------------------------------------------------
@@ -21,20 +21,11 @@ pub trait Primitive {
 pub struct Sphere {
     position: Point3<f64>,
     radius: f64,
-    bounding_box: AABB,
 }
 
 impl Sphere {
     pub fn new(position: Point3<f64>, radius: f64) -> Rc<dyn Primitive> {
-        let radius_vec = Vector3::new(radius, radius, radius);
-        let bln = position - radius_vec;
-        let trf = position + radius_vec;
-        let bounding_box = AABB::new(bln, trf);
-        Rc::new(Sphere {
-            position,
-            radius,
-            bounding_box,
-        })
+        Rc::new(Sphere { position, radius })
     }
 
     pub fn unit() -> Rc<dyn Primitive> {
@@ -78,8 +69,12 @@ impl Primitive for Sphere {
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        return self.bounding_box.intersect_bounding_box(ray);
+    fn get_aabb(&self) -> AABB {
+        let radius = self.radius;
+        let radius_vec = Vector3::new(radius, radius, radius);
+        let bln = self.position - radius_vec;
+        let trf = self.position + radius_vec;
+        AABB::new(bln, trf)
     }
 }
 
@@ -90,16 +85,10 @@ pub struct Circle {
     radius: f64,
     normal: Vector3<f64>,
     constant: f64,
-    bounding_box: AABB,
 }
 
 impl Circle {
     pub fn new(position: Point3<f64>, radius: f64, normal: Vector3<f64>) -> Rc<dyn Primitive> {
-        let radius_vec = Vector3::new(radius, radius, radius);
-        let bln = position - radius_vec;
-        let trf = position + radius_vec;
-        let bounding_box = AABB::new(bln, trf);
-
         let normal = normal.normalize();
         let constant = normal.dot(&position.coords);
         Rc::new(Circle {
@@ -107,7 +96,6 @@ impl Circle {
             radius,
             normal,
             constant,
-            bounding_box,
         })
     }
 
@@ -144,8 +132,13 @@ impl Primitive for Circle {
         }
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let radius = self.radius;
+        let position = self.position;
+        let radius_vec = Vector3::new(radius, radius, radius);
+        let bln = position - radius_vec;
+        let trf = position + radius_vec;
+        AABB::new(bln, trf)
     }
 }
 
@@ -156,7 +149,6 @@ pub struct Cylinder {
     height: f64,
     base_circle: Rc<dyn Primitive>,
     top_circle: Rc<dyn Primitive>,
-    bounding_box: AABB,
 }
 
 impl Cylinder {
@@ -171,14 +163,11 @@ impl Cylinder {
             radius,
             Vector3::new(0.0, 1.0, 0.0),
         );
-        let bln = Point3::new(-radius, 0.0, -radius);
-        let trf = Point3::new(radius, height, radius);
         Rc::new(Cylinder {
             radius,
             height,
             base_circle,
             top_circle,
-            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -261,8 +250,12 @@ impl Primitive for Cylinder {
         }
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let radius = self.radius;
+        let height = self.height;
+        let bln = Point3::new(-radius, 0.0, -radius);
+        let trf = Point3::new(radius, height, radius);
+        AABB::new(bln, trf)
     }
 }
 
@@ -272,7 +265,6 @@ pub struct Cone {
     height: f64,
     constant: f64,
     circle: Rc<dyn Primitive>,
-    bounding_box: AABB,
 }
 
 impl Cone {
@@ -282,14 +274,11 @@ impl Cone {
             radius,
             Vector3::new(0.0, -1.0, 0.0),
         );
-        let bln = Point3::new(-radius, 0.0, -radius);
-        let trf = Point3::new(radius, height, radius);
         let constant = radius * radius / (height * height);
         Rc::new(Cone {
             height,
             constant,
             circle,
-            bounding_box: AABB { bln, trf },
         })
     }
     pub fn unit() -> Rc<dyn Primitive> {
@@ -363,104 +352,106 @@ impl Primitive for Cone {
         }
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let height = self.height;
+        let radius = (self.constant * height * height).sqrt();
+        let bln = Point3::new(-radius, 0.0, -radius);
+        let trf = Point3::new(radius, height, radius);
+        AABB::new(bln, trf)
     }
 }
 
 // RECTANGLE -----------------------------------------------------------------
-#[derive(Clone)]
-pub struct Rectangle {
-    position: Point3<f64>,
-    normal: Vector3<f64>,
-    width_direction: Vector3<f64>,
-    width: f64,
-    height: f64,
-    bounding_box: AABB,
-}
+// #[derive(Clone)]
+// pub struct Rectangle {
+//     position: Point3<f64>,
+//     normal: Vector3<f64>,
+//     width_direction: Vector3<f64>,
+//     width: f64,
+//     height: f64,
+// }
 
-impl Rectangle {
-    pub fn new(
-        position: Point3<f64>,
-        normal: Vector3<f64>,
-        width_direction: Vector3<f64>,
-        width: f64,
-        height: f64,
-    ) -> Rc<dyn Primitive> {
-        let normal = normal.normalize();
-        let width_direction = width_direction.normalize();
-        let height_direction = width_direction.cross(&normal);
-        let bln = position - width / 2.0 * width_direction - height / 2.0 * height_direction;
-        let trf = position + width / 2.0 * width_direction + height / 2.0 * height_direction;
-        Rc::new(Rectangle {
-            position,
-            normal: normal.normalize(),
-            width_direction: width_direction.normalize(),
-            width,
-            height,
-            bounding_box: AABB { bln, trf },
-        })
-    }
-    pub fn unit() -> Rc<dyn Primitive> {
-        Rectangle::new(
-            Point3::new(0.0, 0.0, 0.0),
-            Vector3::new(0.0, 1.0, 0.0),
-            Vector3::new(1.0, 0.0, 0.0),
-            2.0,
-            2.0,
-        )
-    }
-}
+// impl Rectangle {
+//     pub fn new(
+//         position: Point3<f64>,
+//         normal: Vector3<f64>,
+//         width_direction: Vector3<f64>,
+//         width: f64,
+//         height: f64,
+//     ) -> Rc<dyn Primitive> {
+//         let normal = normal.normalize();
+//         let width_direction = width_direction.normalize();
+//         let height_direction = width_direction.cross(&normal);
+//         Rc::new(Rectangle {
+//             position,
+//             normal: normal.normalize(),
+//             width_direction: width_direction.normalize(),
+//             width,
+//             height,
+//         })
+//     }
+//     pub fn unit() -> Rc<dyn Primitive> {
+//         Rectangle::new(
+//             Point3::new(0.0, 0.0, 0.0),
+//             Vector3::new(0.0, 1.0, 0.0),
+//             Vector3::new(1.0, 0.0, 0.0),
+//             2.0,
+//             2.0,
+//         )
+//     }
+// }
 
-impl Primitive for Rectangle {
-    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        let constant = self.position.coords.dot(&self.normal);
-        let denominator = ray.b.dot(&self.normal);
-        let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+// impl Primitive for Rectangle {
+//     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+//         let constant = self.position.coords.dot(&self.normal);
+//         let denominator = ray.b.dot(&self.normal);
+//         let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
 
-        if t > INFINITY {
-            return None;
-        }
+//         if t > INFINITY {
+//             return None;
+//         }
 
-        let intersect = ray.at_t(t);
-        let height_direction = self.width_direction.cross(&self.normal);
-        let (w2, h2) = (self.width / 2.0, self.height / 2.0);
-        let r1 = w2 * self.width_direction;
-        let r2 = h2 * height_direction;
-        let pi = intersect - self.position;
-        let pi_dot_r1 = pi.dot(&r1);
-        let pi_dot_r2 = pi.dot(&r2);
+//         let intersect = ray.at_t(t);
+//         let height_direction = self.width_direction.cross(&self.normal);
+//         let (w2, h2) = (self.width / 2.0, self.height / 2.0);
+//         let r1 = w2 * self.width_direction;
+//         let r2 = h2 * height_direction;
+//         let pi = intersect - self.position;
+//         let pi_dot_r1 = pi.dot(&r1);
+//         let pi_dot_r2 = pi.dot(&r2);
 
-        if pi_dot_r1 >= -w2 && pi_dot_r1 <= w2 && pi_dot_r2 >= -h2 && pi_dot_r2 <= h2 {
-            return Some(Intersection {
-                point: intersect,
-                normal: self.normal,
-                distance: t,
-            });
-        }
-        None
-    }
+//         if pi_dot_r1 >= -w2 && pi_dot_r1 <= w2 && pi_dot_r2 >= -h2 && pi_dot_r2 <= h2 {
+//             return Some(Intersection {
+//                 point: intersect,
+//                 normal: self.normal,
+//                 distance: t,
+//             });
+//         }
+//         None
+//     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
-    }
-}
+//     fn get_bounding_box(&self) -> AABB {
+//         let position = self.position;
+//         let width = self.width;
+//         let height = self.height;
+//         let width_direction = self.width_direction;
+//         let bln = position - width / 2.0 * width_direction - height / 2.0 * height_direction;
+//         let trf = position + width / 2.0 * width_direction + height / 2.0 * height_direction;
+//         AABB::new(bln, trf);
+//         todo!()
+//     }
+// }
 
 // Cube -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Cube {
     bln: Point3<f64>,
     trf: Point3<f64>,
-    bounding_box: AABB,
 }
 
 impl Cube {
     pub fn new(bln: Point3<f64>, trf: Point3<f64>) -> Rc<dyn Primitive> {
-        Rc::new(Cube {
-            bln,
-            trf,
-            bounding_box: AABB { bln, trf },
-        })
+        Rc::new(Cube { bln, trf })
     }
 
     pub fn unit() -> Rc<dyn Primitive> {
@@ -524,8 +515,8 @@ impl Primitive for Cube {
         }
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        AABB::new(self.bln, self.trf)
     }
 }
 
@@ -539,7 +530,6 @@ pub struct Triangle {
     v: Point3<f64>,
     w: Point3<f64>,
     normal: Vector3<f64>,
-    bounding_box: AABB,
 }
 
 impl Triangle {
@@ -547,16 +537,7 @@ impl Triangle {
         let uv = v - u;
         let uw = w - u;
         let normal = uw.cross(&uv).normalize();
-        let bln = u.inf(&v).inf(&w);
-        let trf = u.sup(&v).sup(&w);
-        let bounding_box = AABB { bln, trf };
-        Rc::new(Triangle {
-            u,
-            v,
-            w,
-            normal,
-            bounding_box,
-        })
+        Rc::new(Triangle { u, v, w, normal })
     }
     #[allow(dead_code)]
     pub fn unit() -> Rc<dyn Primitive> {
@@ -608,8 +589,13 @@ impl Primitive for Triangle {
         None
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let u = self.u;
+        let v = self.v;
+        let w = self.w;
+        let bln = u.inf(&v).inf(&w);
+        let trf = u.sup(&v).sup(&w);
+        AABB::new(bln, trf)
     }
 }
 
@@ -617,17 +603,13 @@ impl Primitive for Triangle {
 #[derive(Clone)]
 pub struct Mesh {
     triangles: Vec<Triangle>,
-    bounding_box: AABB,
 }
 
 impl Mesh {
     pub fn new(triangles: Vec<Triangle>) -> Rc<dyn Primitive> {
         // Calculate the bounding box for the entire mesh based on the bounding boxes of individual triangles
         let bounding_box = Mesh::compute_bounding_box(&triangles);
-        Rc::new(Mesh {
-            triangles,
-            bounding_box,
-        })
+        Rc::new(Mesh { triangles })
     }
 
     fn compute_bounding_box(triangles: &Vec<Triangle>) -> AABB {
@@ -685,16 +667,7 @@ impl Mesh {
                                 let uv = u - v;
                                 let uw = w - v;
                                 let normal = uv.cross(&uw).normalize();
-                                let bln = u.inf(&v).inf(&w);
-                                let trf = u.sup(&v).sup(&w);
-                                let bounding_box = AABB { bln, trf };
-                                triangles.push(Triangle {
-                                    u,
-                                    v,
-                                    w,
-                                    normal,
-                                    bounding_box,
-                                });
+                                triangles.push(Triangle { u, v, w, normal });
                             }
                         }
                         _ => {}
@@ -727,8 +700,8 @@ impl Primitive for Mesh {
         closest_intersect
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        Mesh::compute_bounding_box(&self.triangles)
     }
 }
 
@@ -737,18 +710,14 @@ impl Primitive for Mesh {
 pub struct Torus {
     inner_rad: f64,
     outer_rad: f64,
-    bounding_box: AABB,
 }
 
 impl Torus {
     pub fn new(inner_rad: f64, outer_rad: f64) -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
         Rc::new(Torus {
             inner_rad,
             outer_rad,
-            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -854,8 +823,11 @@ impl Primitive for Torus {
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        //TODO!
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        AABB::new(bln, trf)
     }
 }
 
@@ -865,7 +837,6 @@ pub struct Gnonom {
     x_cube: Rc<dyn Primitive>,
     y_cube: Rc<dyn Primitive>,
     z_cube: Rc<dyn Primitive>,
-    bounding_box: AABB,
 }
 
 impl Gnonom {
@@ -884,23 +855,10 @@ impl Gnonom {
             Point3::new(-Self::GNONOM_WIDTH, -Self::GNONOM_WIDTH, 0.0),
             Point3::new(Self::GNONOM_WIDTH, Self::GNONOM_WIDTH, Self::GNONOM_LENGTH),
         );
-        let bounding_box = AABB {
-            bln: Point3::new(
-                -Self::GNONOM_WIDTH,
-                -Self::GNONOM_WIDTH,
-                -Self::GNONOM_WIDTH,
-            ),
-            trf: Point3::new(
-                Self::GNONOM_LENGTH,
-                Self::GNONOM_LENGTH,
-                Self::GNONOM_LENGTH,
-            ),
-        };
         Rc::new(Gnonom {
             x_cube,
             y_cube,
             z_cube,
-            bounding_box,
         })
     }
 }
@@ -922,25 +880,30 @@ impl Primitive for Gnonom {
         None
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        AABB {
+            bln: Point3::new(
+                -Self::GNONOM_WIDTH,
+                -Self::GNONOM_WIDTH,
+                -Self::GNONOM_WIDTH,
+            ),
+            trf: Point3::new(
+                Self::GNONOM_LENGTH,
+                Self::GNONOM_LENGTH,
+                Self::GNONOM_LENGTH,
+            ),
+        }
     }
 }
 
 // CROSS CAP ---------
 #[derive(Clone)]
-pub struct CrossCap {
-    bounding_box: AABB,
-}
+pub struct CrossCap {}
 
 impl CrossCap {
     pub fn new() -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
-        Rc::new(CrossCap {
-            bounding_box: AABB { bln, trf },
-        })
+        Rc::new(CrossCap {})
     }
 }
 
@@ -1014,8 +977,10 @@ impl Primitive for CrossCap {
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        AABB::new(bln, trf)
     }
 }
 
@@ -1024,19 +989,12 @@ impl Primitive for CrossCap {
 pub struct CrossCap2 {
     p: f64,
     q: f64,
-    bounding_box: AABB,
 }
 
 impl CrossCap2 {
     pub fn new(p: f64, q: f64) -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
-        Rc::new(CrossCap2 {
-            p,
-            q,
-            bounding_box: AABB { bln, trf },
-        })
+        Rc::new(CrossCap2 { p, q })
     }
 }
 
@@ -1135,25 +1093,21 @@ impl Primitive for CrossCap2 {
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        AABB::new(bln, trf)
     }
 }
 
 //  Steiner  ---------
 #[derive(Clone)]
-pub struct Steiner {
-    bounding_box: AABB,
-}
+pub struct Steiner {}
 
 impl Steiner {
     pub fn new() -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
-        Rc::new(Steiner {
-            bounding_box: AABB { bln, trf },
-        })
+        Rc::new(Steiner {})
     }
 }
 
@@ -1216,25 +1170,21 @@ impl Primitive for Steiner {
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        AABB::new(bln, trf)
     }
 }
 
 //  Steiner 2 ---------
 #[derive(Clone)]
-pub struct Steiner2 {
-    bounding_box: AABB,
-}
+pub struct Steiner2 {}
 
 impl Steiner2 {
     pub fn new() -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
-        Rc::new(Steiner2 {
-            bounding_box: AABB { bln, trf },
-        })
+        Rc::new(Steiner2 {})
     }
 }
 
@@ -1308,8 +1258,10 @@ impl Primitive for Steiner2 {
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        AABB::new(bln, trf)
     }
 }
 
@@ -1317,18 +1269,12 @@ impl Primitive for Steiner2 {
 #[derive(Clone)]
 pub struct Roman {
     k: f64,
-    bounding_box: AABB,
 }
 
 impl Roman {
     pub fn new(k: f64) -> Rc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
-        Rc::new(Roman {
-            k,
-            bounding_box: AABB { bln, trf },
-        })
+        Rc::new(Roman { k })
     }
 }
 
@@ -1419,8 +1365,10 @@ impl Primitive for Roman {
         })
     }
 
-    fn intersect_bounding_box(&self, ray: &Ray) -> bool {
-        self.bounding_box.intersect_bounding_box(ray)
+    fn get_aabb(&self) -> AABB {
+        let trf = Point3::new(1.0, 1.0, 1.0);
+        let bln = Point3::new(-1.0, -1.0, -1.0);
+        AABB::new(bln, trf)
     }
 }
 
