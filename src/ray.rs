@@ -1,5 +1,5 @@
-use crate::{node::Node, scene::Scene};
-use nalgebra::{Matrix4, Point3, Vector3};
+use crate::{node::Node, scene::Scene, EPSILON};
+use nalgebra::{distance, Matrix4, Point3, Vector3};
 use rand;
 
 const MAX_DEPTH: u8 = 5;
@@ -11,13 +11,6 @@ fn random_vec() -> Vector3<f64> {
 }
 fn random_unit_vec() -> Vector3<f64> {
     random_vec().normalize()
-}
-fn random_on_hemisphere(normal: &Vector3<f64>) -> Vector3<f64> {
-    let dir = random_unit_vec();
-    match dir.dot(normal) > 0.0 {
-        true => dir,
-        false => -dir,
-    }
 }
 
 // INTERSECTION -----------------------------------------------------------------
@@ -105,20 +98,17 @@ impl Ray {
             if node.primitive.intersect_bounding_box(&ray) {
                 // Check primitive intersection
                 if let Some(intersect) = node.primitive.intersect_ray(&ray) {
-                    // Check for closest distance
-                    if intersect.distance < closest_distance {
-                        closest_distance = intersect.distance;
+                    // Check for closest distance by converting to world coords
+                    let intersect = intersect.transform(&node.model, &node.inv_model);
+                    let distance = distance(&ray.a, &intersect.point);
+                    if distance < closest_distance {
+                        closest_distance = distance;
                         closest_intersect = Some((node, intersect));
                     }
                 }
             }
         }
-        match closest_intersect {
-            Some((node, intersect)) => {
-                Some((node, intersect.transform(&node.model, &node.inv_model)))
-            }
-            None => None,
-        }
+        closest_intersect
     }
     // This function takes a scene and returns the color of the point where the ray intersects the scene
     pub fn shade_ray(&self, scene: &Scene, depth: u8) -> Option<Vector3<f32>> {
@@ -143,8 +133,8 @@ impl Ray {
         intersect: &Intersection,
         depth: u8,
     ) -> Vector3<f32> {
-        let point = &intersect.point;
         let normal = &intersect.normal;
+        let point = intersect.point + EPSILON * normal;
         let incidence = &ray.b;
 
         let material = &node.material;
@@ -166,42 +156,49 @@ impl Ray {
             let light_distance = to_light.norm() as f32;
             let to_light = to_light.normalize();
 
-            let to_light_ray = Ray::new(point.clone() + 0.001 * normal, to_light);
+            //Niave Shadows
+            let to_light_ray = Ray::new(point, to_light);
             if to_light_ray.light_blocked(scene, node) {
                 continue;
             }
 
             let n_dot_l = normal.dot(&to_light).max(0.0) as f32;
 
-            //Diffuse component
+            //Reflected component
+            let mut reflect = Vector3::zeros();
+            let reflect_dir = incidence - 2.0 * incidence.dot(&normal) * normal;
+            let reflect_ray = Ray::new(point, reflect_dir);
+            if let Some(col) = reflect_ray.shade_ray(scene, depth + 1) {
+                reflect += col.component_mul(&material.kr)
+            }
+
+            //Diffuse component (Lambertian)
             let mut diffuse = Vector3::zeros();
-            // diffuse = material.kd * n_dot_l;
+            diffuse += material.kd * n_dot_l;
             for _ in 0..DIFFUSE_RAYS {
-                let diffuse_dir = random_on_hemisphere(normal);
-                let ray = Ray::new(point.clone() + normal, diffuse_dir);
-                if let Some(col) = ray.shade_ray(scene, depth + 1) {
+                let diffuse_dir = random_unit_vec();
+                let diffuse_ray = Ray::new(point.clone(), diffuse_dir + normal);
+                if let Some(col) = diffuse_ray.shade_ray(scene, depth + 1) {
                     diffuse += col * DIFFUSE_COEFFICIENT;
                 }
             }
 
             //Specular component
             let mut specular = Vector3::zeros();
-            if n_dot_l > 0.0 {
+            if n_dot_l < 0.0 {
                 let h = (to_light - incidence).normalize();
                 let n_dot_h = normal.dot(&h).max(0.0) as f32;
                 specular = material.ks * n_dot_h.powf(material.shininess);
             }
 
             //Falloff
-            let falloff = 1.0
-                / (1.0
-                    + light.falloff[0]
-                    + light.falloff[1] * light_distance
-                    + light.falloff[2] * light_distance * light_distance);
+            // let falloff = 1.0
+            //     / (1.0
+            //         + light.falloff[0]
+            //         + light.falloff[1] * light_distance
+            //         + light.falloff[2] * light_distance * light_distance);
 
-            let intensity = light
-                .colour
-                .component_mul(&((diffuse + specular) * falloff));
+            let intensity = light.colour.component_mul(&(diffuse + reflect + specular));
             colour += &intensity;
         }
 
