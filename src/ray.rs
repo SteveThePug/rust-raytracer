@@ -98,6 +98,10 @@ impl Ray {
             if node.primitive.intersect_bounding_box(&ray) {
                 // Check primitive intersection
                 if let Some(intersect) = node.primitive.intersect_ray(&ray) {
+                    // Dont intersect with itself
+                    if intersect.distance < EPSILON {
+                        continue;
+                    }
                     // Check for closest distance by converting to world coords
                     let intersect = intersect.transform(&node.model, &node.inv_model);
                     let distance = distance(&ray.a, &intersect.point);
@@ -134,7 +138,7 @@ impl Ray {
         depth: u8,
     ) -> Vector3<f32> {
         let normal = &intersect.normal;
-        let point = intersect.point + EPSILON * normal;
+        let point = intersect.point;
         let incidence = &ray.b;
 
         let material = &node.material;

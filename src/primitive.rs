@@ -1,5 +1,5 @@
 use crate::{
-    bvh::BoundingBox,
+    bvh::AABB,
     ray::{Intersection, Ray},
     {EPSILON, INFINITY},
 };
@@ -21,7 +21,7 @@ pub trait Primitive {
 pub struct Sphere {
     position: Point3<f64>,
     radius: f64,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Sphere {
@@ -29,7 +29,7 @@ impl Sphere {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
-        let bounding_box = BoundingBox::new(bln, trf);
+        let bounding_box = AABB::new(bln, trf);
         Rc::new(Sphere {
             position,
             radius,
@@ -90,7 +90,7 @@ pub struct Circle {
     radius: f64,
     normal: Vector3<f64>,
     constant: f64,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Circle {
@@ -98,7 +98,7 @@ impl Circle {
         let radius_vec = Vector3::new(radius, radius, radius);
         let bln = position - radius_vec;
         let trf = position + radius_vec;
-        let bounding_box = BoundingBox::new(bln, trf);
+        let bounding_box = AABB::new(bln, trf);
 
         let normal = normal.normalize();
         let constant = normal.dot(&position.coords);
@@ -156,7 +156,7 @@ pub struct Cylinder {
     height: f64,
     base_circle: Rc<dyn Primitive>,
     top_circle: Rc<dyn Primitive>,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Cylinder {
@@ -178,7 +178,7 @@ impl Cylinder {
             height,
             base_circle,
             top_circle,
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -272,7 +272,7 @@ pub struct Cone {
     height: f64,
     constant: f64,
     circle: Rc<dyn Primitive>,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Cone {
@@ -289,7 +289,7 @@ impl Cone {
             height,
             constant,
             circle,
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
     pub fn unit() -> Rc<dyn Primitive> {
@@ -376,7 +376,7 @@ pub struct Rectangle {
     width_direction: Vector3<f64>,
     width: f64,
     height: f64,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Rectangle {
@@ -398,7 +398,7 @@ impl Rectangle {
             width_direction: width_direction.normalize(),
             width,
             height,
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
     pub fn unit() -> Rc<dyn Primitive> {
@@ -451,7 +451,7 @@ impl Primitive for Rectangle {
 pub struct Cube {
     bln: Point3<f64>,
     trf: Point3<f64>,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Cube {
@@ -459,7 +459,7 @@ impl Cube {
         Rc::new(Cube {
             bln,
             trf,
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 
@@ -539,7 +539,7 @@ pub struct Triangle {
     v: Point3<f64>,
     w: Point3<f64>,
     normal: Vector3<f64>,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Triangle {
@@ -549,7 +549,7 @@ impl Triangle {
         let normal = uw.cross(&uv).normalize();
         let bln = u.inf(&v).inf(&w);
         let trf = u.sup(&v).sup(&w);
-        let bounding_box = BoundingBox { bln, trf };
+        let bounding_box = AABB { bln, trf };
         Rc::new(Triangle {
             u,
             v,
@@ -617,7 +617,7 @@ impl Primitive for Triangle {
 #[derive(Clone)]
 pub struct Mesh {
     triangles: Vec<Triangle>,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Mesh {
@@ -630,7 +630,7 @@ impl Mesh {
         })
     }
 
-    fn compute_bounding_box(triangles: &Vec<Triangle>) -> BoundingBox {
+    fn compute_bounding_box(triangles: &Vec<Triangle>) -> AABB {
         let mut bln = Point3::new(INFINITY, INFINITY, INFINITY);
         let mut trf = -bln;
         for triangle in triangles {
@@ -641,7 +641,7 @@ impl Mesh {
             trf = trf.sup(&triangle.v);
             trf = trf.sup(&triangle.w);
         }
-        BoundingBox { bln, trf }
+        AABB { bln, trf }
     }
 
     pub fn from_file(filename: &str) -> Rc<dyn Primitive> {
@@ -687,7 +687,7 @@ impl Mesh {
                                 let normal = uv.cross(&uw).normalize();
                                 let bln = u.inf(&v).inf(&w);
                                 let trf = u.sup(&v).sup(&w);
-                                let bounding_box = BoundingBox { bln, trf };
+                                let bounding_box = AABB { bln, trf };
                                 triangles.push(Triangle {
                                     u,
                                     v,
@@ -737,7 +737,7 @@ impl Primitive for Mesh {
 pub struct Torus {
     inner_rad: f64,
     outer_rad: f64,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Torus {
@@ -748,7 +748,7 @@ impl Torus {
         Rc::new(Torus {
             inner_rad,
             outer_rad,
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -865,7 +865,7 @@ pub struct Gnonom {
     x_cube: Rc<dyn Primitive>,
     y_cube: Rc<dyn Primitive>,
     z_cube: Rc<dyn Primitive>,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Gnonom {
@@ -884,7 +884,7 @@ impl Gnonom {
             Point3::new(-Self::GNONOM_WIDTH, -Self::GNONOM_WIDTH, 0.0),
             Point3::new(Self::GNONOM_WIDTH, Self::GNONOM_WIDTH, Self::GNONOM_LENGTH),
         );
-        let bounding_box = BoundingBox {
+        let bounding_box = AABB {
             bln: Point3::new(
                 -Self::GNONOM_WIDTH,
                 -Self::GNONOM_WIDTH,
@@ -930,7 +930,7 @@ impl Primitive for Gnonom {
 // CROSS CAP ---------
 #[derive(Clone)]
 pub struct CrossCap {
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl CrossCap {
@@ -939,7 +939,7 @@ impl CrossCap {
         let trf = Point3::new(1.0, 1.0, 1.0);
         let bln = Point3::new(-1.0, -1.0, -1.0);
         Rc::new(CrossCap {
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -1024,7 +1024,7 @@ impl Primitive for CrossCap {
 pub struct CrossCap2 {
     p: f64,
     q: f64,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl CrossCap2 {
@@ -1035,7 +1035,7 @@ impl CrossCap2 {
         Rc::new(CrossCap2 {
             p,
             q,
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -1143,7 +1143,7 @@ impl Primitive for CrossCap2 {
 //  Steiner  ---------
 #[derive(Clone)]
 pub struct Steiner {
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Steiner {
@@ -1152,7 +1152,7 @@ impl Steiner {
         let trf = Point3::new(1.0, 1.0, 1.0);
         let bln = Point3::new(-1.0, -1.0, -1.0);
         Rc::new(Steiner {
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -1224,7 +1224,7 @@ impl Primitive for Steiner {
 //  Steiner 2 ---------
 #[derive(Clone)]
 pub struct Steiner2 {
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Steiner2 {
@@ -1233,7 +1233,7 @@ impl Steiner2 {
         let trf = Point3::new(1.0, 1.0, 1.0);
         let bln = Point3::new(-1.0, -1.0, -1.0);
         Rc::new(Steiner2 {
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 }
@@ -1317,7 +1317,7 @@ impl Primitive for Steiner2 {
 #[derive(Clone)]
 pub struct Roman {
     k: f64,
-    bounding_box: BoundingBox,
+    bounding_box: AABB,
 }
 
 impl Roman {
@@ -1327,7 +1327,7 @@ impl Roman {
         let bln = Point3::new(-1.0, -1.0, -1.0);
         Rc::new(Roman {
             k,
-            bounding_box: BoundingBox { bln, trf },
+            bounding_box: AABB { bln, trf },
         })
     }
 }
