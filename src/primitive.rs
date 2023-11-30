@@ -623,7 +623,7 @@ impl Mesh {
             trf = trf.sup(&triangle.v);
             trf = trf.sup(&triangle.w);
         }
-        AABB { bln, trf }
+        AABB::new(bln, trf)
     }
 
     pub fn from_file(filename: &str) -> Rc<dyn Primitive> {
@@ -881,18 +881,18 @@ impl Primitive for Gnonom {
     }
 
     fn get_aabb(&self) -> AABB {
-        AABB {
-            bln: Point3::new(
+        AABB::new(
+            Point3::new(
                 -Self::GNONOM_WIDTH,
                 -Self::GNONOM_WIDTH,
                 -Self::GNONOM_WIDTH,
             ),
-            trf: Point3::new(
+            Point3::new(
                 Self::GNONOM_LENGTH,
                 Self::GNONOM_LENGTH,
                 Self::GNONOM_LENGTH,
             ),
-        }
+        )
     }
 }
 

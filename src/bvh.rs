@@ -1,5 +1,5 @@
 use crate::{node::Node, ray::*, EPSILON};
-use nalgebra::{point, Point3, Vector3};
+use nalgebra::{Point3, Vector3};
 use std::collections::HashMap;
 use std::ops::Index;
 
@@ -271,7 +271,7 @@ impl BVH {
 
         // Get the root node and assign it to index 0
         let mut root = &bvh_nodes[root_node_index];
-        (root.l_idx, root.r_idx) = (0, 0); //Root node has no children to begin with
+        root.l_idx = 0; //Root node has no children to begin with
         (root.first_prim, root.prim_count) = (0, n); //Make root include all n nodes
         tree.update_bvh_node_aabb(root_node_index); //Fit the root nodes AABB
         tree.subdivide(root_node_index);
