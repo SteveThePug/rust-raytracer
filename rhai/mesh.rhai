@@ -1,8 +1,8 @@
 let scene = Scene();
 
-let material = Material(V(0.2,0.2,0.2), V(0.2, 0.2, 0.2), 10.0);
+let material = Material(V(0.9,0.2,0.7), V(0.7, 0.2, 0.7), 10.0);
 scene.addMaterial("material", material);
-let material2 = Material(V(0.2,0.7,0.2), V(0.2, 0.2, 0.2), 10.0);
+let material2 = Material(V(0.2,0.7,0.2), V(0.7, 0.7, 0.7), 10.0);
 scene.addMaterial("mat2", material2);
 
 let camera = Camera(P(0.0,0.0,2.0), P(0.0,0.0,0.0), V(0.0,1.0,0.0));

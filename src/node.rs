@@ -14,7 +14,7 @@ pub struct Node {
     //Model matricies
     pub model: Matrix4<f64>,
     pub inv_model: Matrix4<f64>,
-
+    //If the node is active
     pub active: bool,
 }
 

@@ -1,7 +1,14 @@
 use crate::{node::Node, ray::*, EPSILON};
-use nalgebra::{Point3, Vector3};
+use nalgebra::{distance, point, Matrix4, Point3, Vector3};
 use std::collections::HashMap;
-use std::ops::Index;
+use std::fmt;
+
+// Debuging statics
+static mut STATIC0: i32 = 0;
+static mut STATIC1: i32 = 0;
+static mut STATIC2: i32 = 0;
+static mut STATIC3: i32 = 0;
+static mut STATIC4: i32 = 0;
 
 // BOUNDING BOX -----------------------------------------------------------------
 #[derive(Clone)]
@@ -16,18 +23,28 @@ impl AABB {
     pub fn new(bln: Point3<f64>, trf: Point3<f64>) -> AABB {
         let bln = bln + Vector3::new(EPSILON, EPSILON, EPSILON);
         let trf = trf - Vector3::new(EPSILON, EPSILON, EPSILON);
-        let centroid = bln + (bln - trf) / 2.0;
+        let centroid = bln + (trf - bln) / 2.0;
         AABB { bln, trf, centroid }
     }
+    //Empty box
     pub fn empty() -> AABB {
         AABB {
-            bln: Point3::new(0.0, 0.0, 0.0),
-            trf: Point3::new(0.0, 0.0, 0.0),
+            bln: Point3::new(f64::MAX, f64::MAX, f64::MAX),
+            trf: Point3::new(f64::MIN, f64::MIN, f64::MIN),
             centroid: Point3::new(0.0, 0.0, 0.0),
         }
     }
+    //Apply a matrix transformation to a box
+    pub fn transform_mut(&mut self, mat: &Matrix4<f64>) {
+        let bln = &mut self.bln;
+        let trf = &mut self.trf;
+        let centroid = &mut self.centroid;
+        self.bln = mat.transform_point(bln);
+        self.trf = mat.transform_point(trf);
+        self.centroid = mat.transform_point(centroid);
+    }
     // Intersect bounding box exactly
-    pub fn intersect_bounding_box(&self, ray: &Ray) -> bool {
+    pub fn intersect_ray(&self, ray: &Ray) -> bool {
         let bln = &self.bln;
         let trf = &self.trf;
         let t1 = (bln - ray.a).component_div(&ray.b);
@@ -53,7 +70,7 @@ impl AABB {
         false
     }
     // Intersect way with some epsilon term
-    pub fn intersect_bounding_box_aprox(&self, ray: &Ray) -> bool {
+    pub fn intersect_ray_aprox(&self, ray: &Ray) -> bool {
         let bln = &self.bln;
         let trf = &self.trf;
         let t1 = (bln - ray.a).component_div(&ray.b);
@@ -146,91 +163,26 @@ impl AABB {
         let size = self.size();
         2.0 * (size.x * size.y + size.x * size.z + size.y * size.z)
     }
+    pub fn area(&self) -> f64 {
+        let extent = self.trf - self.bln;
+        return extent.x * extent.y + extent.y * extent.z + extent.z * extent.x;
+    }
     // Volume of the AABB
     pub fn volume(&self) -> f64 {
         let size = self.size();
         size.x * size.y * size.z
     }
 }
-
-// Index implemntation of the BVH tree
-// pub enum BVHNode {
-//     Leaf {
-//         p_idx: usize, //Parent index
-//         depth: usize, //Depth in BVH tree
-//         n_idx: usize, //Node index in corrosponding Vec<Node>
-//     },
-//     Node {
-//         p_idx: usize, //Parent index
-//         l_idx: usize, //Left child index
-//         l_aabb: AABB, //Left AABB
-//         r_idx: usize, //Right child index
-//         r_aabb: AABB, //Right AABB
-//         depth: usize, //Depth in BVH tree
-//     },
-// }
-// impl BVHNode {
-//     //Get parent
-//     fn get_parent(&self) -> usize {
-//         match *self {
-//             BVHNode::Node { p_idx, .. } | BVHNode::Leaf { p_idx, .. } => p_idx,
-//         }
-//     }
-//     //Get the left child of a node
-//     fn get_child_l(&self) -> usize {
-//         match *self {
-//             BVHNode::Leaf { .. } => panic!("Cannot get child of leaf node"),
-//             BVHNode::Node { l_idx, .. } => l_idx,
-//         }
-//     }
-//     // Get right child
-//     fn get_child_r(&self) -> usize {
-//         match *self {
-//             BVHNode::Leaf { .. } => panic!("Cannot get child of leaf node"),
-//             BVHNode::Node { r_idx, .. } => r_idx,
-//         }
-//     }
-//     // Get the depth of selected node
-//     pub fn depth(&self) -> usize {
-//         match *self {
-//             BVHNode::Node { depth, .. } | BVHNode::Leaf { depth, .. } => depth,
-//         }
-//     }
-//     // Get the aabb of the current node, if leaf return the primitives aabb
-//     // If node return the join of the two child nodes
-//     pub fn get_node_aabb(&self, nodes: &Vec<Node>) -> AABB {
-//         match *self {
-//             BVHNode::Node { l_aabb, r_aabb, .. } => l_aabb.join(&r_aabb),
-//             BVHNode::Leaf { aabb, .. } => aabb,
-//         }
-//     }
-// }
-// //Implementation of the BVH
-// pub struct BVHTree<'a> {
-//     pub nodes: &'a HashMap<String, Node>,
-//     pub bvh_nodes: Vec<BVHNode>,
-// }
-
-// impl<'a> BVHTree<'a> {
-//     //Generate a BVH tree given a vector of nodes
-//     pub fn new(nodes: &HashMap<String, Node>) -> BVHTree {
-//         //We will make an aabb that bounds all shapes
-//         let mut root_aabb = AABB::empty();
-//         let mut root_centroid = AABB::empty();
-//         for (_, node) in nodes {
-//             let node_aabb = node.primitive.get_aabb();
-//             root_aabb.join_mut(&node_aabb);
-//             root_centroid.grow_mut(&node_aabb.get_centroid());
-//         }
-
-//         //We will make an aabb that bounds all centroids
-//         return BVHTree {
-//             nodes: &HashMap::new(),
-//             bvh_nodes: vec![],
-//         };
-//     }
-// }
-
+impl fmt::Display for AABB {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.bln[0] == f64::MAX || self.trf[0] == f64::MIN {
+            writeln!(f, "Empty aabb")
+        } else {
+            writeln!(f, "bln: {}\ntrf: {}", self.bln, self.trf)
+        }
+    }
+}
+#[derive(Clone)]
 pub struct BVHNode {
     aabb: AABB,        //The nodes bounding box
     l_idx: usize,      //Child node l, the right node is alway l_idx + 1
@@ -238,129 +190,282 @@ pub struct BVHNode {
     prim_count: usize, //Number of primitives the node encapsulates
 }
 
+impl BVHNode {
+    pub fn default() -> BVHNode {
+        BVHNode {
+            aabb: AABB::empty(),
+            l_idx: 0,
+            first_prim: 0,
+            prim_count: 0,
+        }
+    }
+}
+
+impl fmt::Display for BVHNode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        writeln!(f, "l_idx: {}", self.l_idx)?;
+        writeln!(f, "First Prim: {}", self.first_prim)?;
+        writeln!(f, "Prim Count: {}", self.prim_count)?;
+        writeln!(f, "aabb: {}", self.aabb)
+    }
+}
+
 pub struct BVH {
     bvh_nodes: Vec<BVHNode>, //BVH nodes with AABBs
     nodes: Vec<Node>,        //Nodes with primitives
     nodes_used: usize,
-    root_node_index: usize,
 }
 
 impl BVH {
     //Build a bvh by subdividing recursively
-    fn build(in_nodes: HashMap<String, Node>) -> BVH {
-        //Make our own vec of nodes so that we can refer to it by index
-        //Might be long to copy scene, so alternative methods may be prefered
-        let nodes = vec![];
+    pub fn build(in_nodes: &HashMap<String, Node>) -> BVH {
+        /*
+        Make our own vec of nodes so that we can refer to it by index
+        This might be expensive so another method is preferred
+        */
+        let mut nodes = vec![];
         for (_, node) in in_nodes {
-            nodes.push(node);
+            nodes.push(node.clone());
         }
 
         //A BVH tree will be maximum size of 2*n + 1
+        //Initialise an empty BVHNode with empty AABB
         let n = nodes.len();
-        let mut bvh_nodes: Vec<BVHNode> = Vec::with_capacity(2 * n + 1);
+        let bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 2 * n + 1];
 
         //Begin constructing our BVH tree
-        let root_node_index = 0;
+        //One node used to begin with (The root node)
         let nodes_used = 1;
-        let tree = BVH {
+        let mut tree = BVH {
             nodes,
             bvh_nodes,
-            root_node_index,
             nodes_used,
         };
-
-        // Get the root node and assign it to index 0
-        let mut root = &bvh_nodes[root_node_index];
-        root.l_idx = 0; //Root node has no children to begin with
+        // Get the root node at index 0
+        let root = &mut tree.bvh_nodes[0];
+        root.l_idx = 0; //Root node has no left or right child to begin
         (root.first_prim, root.prim_count) = (0, n); //Make root include all n nodes
-        tree.update_bvh_node_aabb(root_node_index); //Fit the root nodes AABB
-        tree.subdivide(root_node_index);
+        tree.update_bvh_node_aabb(0); //Create the root nodes AABB on the n primitives
+        tree.subdivide(0); //Sub divide the root node
         tree
     }
-    // Will update the node's AABB at bvh[index]
+    // Will update the node's AABB at bvh_nodes[index]
     fn update_bvh_node_aabb(&mut self, index: usize) {
         // We will make his node bound all its primitives
-        let bvh_node = &self.bvh_nodes[index]; //Get the BVHNode we are working
-        let bvh_node_aabb = AABB::empty(); //Create the BVHNode's AABB
+        let bvh_node = &mut self.bvh_nodes[index]; // Current BVHNode
+        let bvh_node_aabb = &mut bvh_node.aabb; //Current node AABB
 
-        let start_index = bvh_node.first_prim; //Start index of the first primitive the node contains
-        let count = bvh_node.prim_count; //Number of primitives within the nodes aabb
+        let first_prim = bvh_node.first_prim; //Start index of prim
+        let prim_count = bvh_node.prim_count; //Number of primitives within the nodes aabb
 
-        for i in 0..count {
-            let primitive = &self.nodes[start_index + i].primitive; //Get the primitive from the Vec<Node>
-            let node_aabb = primitive.get_aabb(); //Get the primitives aabb
-            bvh_node_aabb.join_mut(&node_aabb); //Join it with the bvh_nodes aabb
+        for i in 0..prim_count {
+            let node = &self.nodes[first_prim + i]; //Get the node from the Vec<Node>
+            let mut node_aabb = node.primitive.get_aabb(); //Get the primitive's AABB
+            node_aabb.transform_mut(&node.model); //Transform the AABB to world coordinates
+            bvh_node_aabb.join_mut(&node_aabb); //Join it with the BVH node's AABB
         }
-    }
 
+        // unsafe {
+        //     println!("UPDATE TO AABB ---- {STATIC0}");
+        //     STATIC0 += 1;
+        //     let bvh_node = &mut self.bvh_nodes[index]; //Get the BVHNode we are working on
+        //     println!("{bvh_node}");
+        // }
+    }
+    // Subdivision, will subdivide a split
     fn subdivide(&mut self, index: usize) {
+        //Get the bvh_node we will be altering
         // Determine the axis and position of the split plane
         // Split the group of primitives in two halves using the split plane
         // Create child nodes for each half
         // Recurse into each of the child nodes.
 
-        // Get information about the node we want to subdivide
-        let bvh_node = &self.bvh_nodes[index]; //Get the BVHNode we are working
-
-        /* ----------------- SUBDIVIDE BY CENTROID --------------------- */
-        // let bvh_node_centroid_aabb = AABB::empty(); //Create the BVHNode's AABB
-        // let start_index = bvh_node.first_prim; //Start index of the first primitive the node contains
-        // let count = bvh_node.prim_count; //Number of primitives within the nodes aabb
-        // for i in 0..count {
-        //     let primitive = &self.nodes[start_index + i].primitive; //Get the primitive from the Vec<Node>
-        //     let node_aabb_centroid = primitive.get_aabb().get_centroid(); //Get the primitives aabb centroid
-        //     bvh_node_centroid_aabb.grow_mut(&node_aabb_centroid); // Grow the aabb to include the all centroids
-        // }
+        //Leaf node case, we cannot sub-divide any more
+        if self.bvh_nodes[index].prim_count == 1 {
+            return;
+        };
 
         /* ------------ SUBDIVIDE BY LONGEST AXIS ------------ */
-
-        let (bln, trf) = (bvh_node.aabb.bln, bvh_node.aabb.trf);
+        //Get information about the node we want to subdivide
+        let (bln, trf) = (
+            self.bvh_nodes[index].aabb.bln,
+            self.bvh_nodes[index].aabb.trf,
+        );
         let extent = trf - bln;
-        let axis = 0; // Assume that x is longest
+        let mut axis = 0; // Assume that x is longest
         if extent.y > extent.x {
-            axis = 1 // Split y if longer
+            axis = 1; // Split y if longest
         };
         if extent.z > extent[axis] {
-            axis = 2 // Split z if loner
+            axis = 2; // Split z if longest
         };
-        let split_pos = bln[axis] + extent[axis] * 0.5; //Final split along this axis
+        let split_pos = bln[axis] + extent[axis] * 0.5; // Final split down the middle of AABB
 
-        //Perform a quicksort our nodes
-        let i = bvh_node.first_prim;
-        let j = i + bvh_node.prim_count - 1;
-        while i <= j {
-            let centroid = self.nodes[i].primitive.get_aabb().get_centroid();
-            if centroid[axis] < split_pos {
-                i += 1; //If it is on left split remain in place
-            } else {
-                self.nodes.swap(i, j); //Move to right split
-                j -= 1;
+        /* --------- SUBDIVIDE BY Surface Area Heuristic ---------*/
+        // let mut best_axis: Option<usize> = None;
+        // let mut best_pos = 0.0;
+        // let mut best_cost = 1e30;
+        // let first_prim_idx = self.bvh_nodes[index].first_prim;
+        // for axis in 0..2 {
+        //     for i in 0..self.bvh_nodes[index].prim_count {
+        //         let node = &self.nodes[first_prim_idx + i];
+        //         //Get the centroid of the bounding box
+        //         let centroid = node.primitive.get_aabb().get_centroid();
+        //         //Place the centroid into world coordinates
+        //         let world_centroid = node.model.transform_point(&centroid);
+        //         //Get the candidate position
+        //         let candidate_pos = world_centroid[axis];
+        //         let cost = self.evaluate_sah(&self.bvh_nodes[index], axis, candidate_pos);
+        //         if cost < best_cost {
+        //             best_pos = candidate_pos;
+        //             best_axis = Some(axis);
+        //             best_cost = cost;
+        //         }
+        //     }
+        // }
+        // let axis = match best_axis {
+        //     Some(axis) => axis,
+        //     None => 0,
+        // };
+        // let split_pos = best_pos;
+
+        let left_count;
+        let right_count;
+        let mut i;
+        let mut j;
+        {
+            let bvh_node = &mut self.bvh_nodes[index];
+            i = bvh_node.first_prim; //Start of array
+            j = i + bvh_node.prim_count - 1; //End of array
+            while i <= j {
+                //Perform a quicksort dependent on location
+                let node = &self.nodes[i]; // Node we would like to sort
+                let centroid = node.primitive.get_aabb().get_centroid(); //Centroid of node we would like to sort
+                let centroid = node.model.transform_point(&centroid); //Transform to world coordinates
+                if centroid[axis] < split_pos {
+                    i += 1; // On Left-Hand-Side
+                } else {
+                    self.nodes.swap(i, j);
+                    j -= 1; // On Right-Hand-Side
+                }
+            }
+            //Now we have two splits
+            //The lhs of the array is in the left split  0..left_count
+            //The rhs of the array is on the right split left_count + 1..n
+            left_count = i - bvh_node.first_prim; //Number of prims on lhs
+            right_count = bvh_node.prim_count - left_count;
+            //println!("SPLIT INTO: {left_count} {right_count}");
+            if left_count == 0 || left_count == bvh_node.prim_count {
+                //Split did nothing
+                return;
             }
         }
-        //Now we have two children, the lhs of the array is in the left split, and the rhs of the array is on the right split
-        let left_count = i - bvh_node.first_prim; //Number of prims on lhs
-        if left_count == 0 || left_count == bvh_node.prim_count {
-            return; //If we have no more on the left, disregard
-        }
+        // unsafe {
+        //     println!("SUBDIVIDE: {STATIC1}");
+        //     println!("SPLIT INTO: {left_count} ");
+        //     STATIC1 += 1;
+        // }
+
         let l_idx = self.nodes_used; //Left child
-        self.nodes_used += 1;
-        let r_idx = self.nodes_used; //Right child
-        self.nodes_used += 1;
+        self.bvh_nodes[index].l_idx = l_idx;
+        self.nodes_used = self.nodes_used + 2;
 
-        bvh_node.l_idx = l_idx;
+        //Set left node information
+        self.bvh_nodes[l_idx].first_prim = self.bvh_nodes[index].first_prim; //Left split begins at parent split
+        self.bvh_nodes[l_idx].prim_count = left_count; // Left prims
 
-        self.bvh_nodes[l_idx].first_prim = bvh_node.first_prim; //Set left split
-        self.bvh_nodes[l_idx].prim_count = left_count; //We know this info from our quicksort
+        //Set right node information
+        self.bvh_nodes[l_idx + 1].first_prim = i; // Right split start index
+        self.bvh_nodes[l_idx + 1].prim_count = right_count;
 
-        self.bvh_nodes[r_idx].first_prim = i; //Set right split information
-        self.bvh_nodes[r_idx].prim_count = bvh_node.prim_count - left_count;
-        bvh_node.prim_count = 0;
+        //Current node is not a leaf node
+        self.bvh_nodes[index].prim_count = 0;
 
         self.update_bvh_node_aabb(l_idx); //Update AABB for left of split
-        self.update_bvh_node_aabb(r_idx); //Update AABB for right of split
+        self.update_bvh_node_aabb(l_idx + 1); //Update AABB for right of split
 
         //Recurse
-        self.subdivide(l_idx);
-        self.subdivide(r_idx);
+        self.subdivide(l_idx); // Subdivide left index
+        self.subdivide(l_idx + 1); // SUbdivide right index
+    }
+    // Traverse the BVH, 0 will be needed to start at root node
+    pub fn traverse(&self, ray: &Ray, idx: usize) -> Option<(&Node, Intersection)> {
+        let bvh_node = &self.bvh_nodes[idx];
+        if !bvh_node.aabb.intersect_ray(ray) {
+            // No intersection with BVH in world coordinates
+            return None;
+        }
+        if bvh_node.prim_count > 0 {
+            // Leaf node intersection
+            let node_idx = bvh_node.first_prim;
+            let node = &self.nodes[node_idx];
+            if !node.active {
+                return None;
+            }
+            let ray = ray.transform(&node.inv_model); //Transform ray to model coords
+            if let Some(intersect) = node.primitive.intersect_ray(&ray) {
+                if intersect.distance < EPSILON {
+                    return None;
+                } else {
+                    // Convert intersect back to world coords
+                    let intersect = intersect.transform(&node.model, &node.inv_model);
+                    return Some((node, intersect));
+                }
+            }
+            return None;
+        } else {
+            //Recurse down the BVH
+            //Recurse down the BVH right node
+            let intersect_l = self.traverse(ray, bvh_node.l_idx);
+            let intersect_r = self.traverse(ray, bvh_node.l_idx + 1);
+
+            match (intersect_l, intersect_r) {
+                (None, None) => return None,
+                (Some(intersect), None) => return Some(intersect),
+                (None, Some(intersect)) => return Some(intersect),
+                (Some((node_l, inter_l)), Some((node_r, inter_r))) => {
+                    //Compare intersect distance
+                    let dist_l = distance(&ray.a, &inter_l.point);
+                    let dist_r = distance(&ray.a, &inter_r.point);
+                    if dist_l < dist_r {
+                        return Some((node_l, inter_l));
+                    } else {
+                        return Some((node_r, inter_r));
+                    }
+                }
+            }
+        }
+    }
+    fn evaluate_sah(&self, node: &BVHNode, axis: usize, pos: f64) -> f64 {
+        // determine triangle counts and bounds for this split candidate
+        let mut l_aabb = AABB::empty();
+        let mut r_aabb = AABB::empty();
+        let mut l_count = 0;
+        let mut r_count = 0;
+        for i in 0..node.prim_count {
+            let aabb = self.nodes[node.first_prim + i].primitive.get_aabb();
+            if aabb.trf[axis] < pos {
+                l_count += 1;
+                l_aabb.grow_mut(&aabb.trf);
+            } else {
+                r_count += 1;
+                r_aabb.grow_mut(&aabb.bln);
+            }
+        }
+        let cost = l_count as f64 * l_aabb.area() + r_count as f64 * r_aabb.area();
+        match cost > 0.0 {
+            true => 0.0,
+            false => 1e30,
+        }
+    }
+}
+
+impl fmt::Display for BVH {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (i, node) in self.bvh_nodes.iter().enumerate() {
+            writeln!(f, "Node: {i}")?;
+            writeln!(f, "{node}")?;
+        }
+        write!(f, "")
     }
 }

@@ -1,10 +1,6 @@
-use crate::{node::Node, scene::Scene, EPSILON};
+use crate::{bvh::BVH, node::Node, scene::Scene, state::RaytracingOption, EPSILON};
 use nalgebra::{distance, Matrix4, Point3, Vector3};
 use rand;
-
-const MAX_DEPTH: u8 = 5;
-const DIFFUSE_RAYS: i8 = 5;
-const DIFFUSE_COEFFICIENT: f32 = 0.5;
 
 fn random_vec() -> Vector3<f64> {
     Vector3::new(rand::random(), rand::random(), rand::random())
@@ -67,6 +63,7 @@ impl Ray {
         }
     }
     //This function will determine if the ray hits an object in the scene
+    //This is not optimised as it does not include bounding boxes
     pub fn hit_scene(&self, scene: &Scene) -> bool {
         for (_, node) in &scene.nodes {
             if !node.active {
@@ -74,17 +71,14 @@ impl Ray {
             }
             // Transform ray into local model cordinates
             let ray = self.transform(&node.inv_model);
-            // Check bounding box intersection
-            if node.primitive.intersect_bounding_box(&ray) {
-                // Check primitive intersection
-                if node.primitive.intersect_ray(&ray).is_some() {
-                    return true;
-                }
+            if node.primitive.intersect_ray(&ray).is_some() {
+                return true;
             }
         }
         false
     }
     //This function find the closest intersection point of a ray with an object in the scene
+    //Also not optimised, as it does not include bounding boxes
     pub fn closest_intersect<'a>(&'a self, scene: &'a Scene) -> Option<(&Node, Intersection)> {
         let mut closest_distance = f64::MAX;
         let mut closest_intersect: Option<(&Node, Intersection)> = None;
@@ -94,38 +88,55 @@ impl Ray {
             }
             // Transform ray into local model cordinates
             let ray = self.transform(&node.inv_model);
-            // Check bounding box intersection
-            if node.primitive.intersect_bounding_box(&ray) {
-                // Check primitive intersection
-                if let Some(intersect) = node.primitive.intersect_ray(&ray) {
-                    // Dont intersect with itself
-                    if intersect.distance < EPSILON {
-                        continue;
-                    }
-                    // Check for closest distance by converting to world coords
-                    let intersect = intersect.transform(&node.model, &node.inv_model);
-                    let distance = distance(&ray.a, &intersect.point);
-                    if distance < closest_distance {
-                        closest_distance = distance;
-                        closest_intersect = Some((node, intersect));
-                    }
+            // Check primitive intersection
+            if let Some(intersect) = node.primitive.intersect_ray(&ray) {
+                // Dont intersect with itself
+                if intersect.distance < EPSILON {
+                    continue;
+                }
+                // Check for closest distance by converting to world coords
+                let intersect = intersect.transform(&node.model, &node.inv_model);
+                let distance = distance(&ray.a, &intersect.point);
+                if distance < closest_distance {
+                    closest_distance = distance;
+                    closest_intersect = Some((node, intersect));
                 }
             }
         }
         closest_intersect
     }
     // This function takes a scene and returns the color of the point where the ray intersects the scene
-    pub fn shade_ray(&self, scene: &Scene, depth: u8) -> Option<Vector3<f32>> {
-        if depth == MAX_DEPTH {
+    pub fn shade_ray(
+        &self,
+        scene: &Scene,
+        depth: u8,
+        options: &RaytracingOption,
+        sbvh: &Option<BVH>,
+    ) -> Option<Vector3<f32>> {
+        if depth == options.ray_depth {
             return None;
         }
-        match self.closest_intersect(scene) {
-            Some((node, intersect)) => {
-                Some(Ray::phong_shade_point(
-                    &scene, &self, &node, &intersect, depth,
-                )) // If there is an intersection, shade it
+        match sbvh {
+            Some(bvh) => {
+                //Intersect the scene with the bvh
+                if let Some((node, intersect)) = bvh.traverse(&self, 0) {
+                    return Some(Ray::phong_shade_point(
+                        &scene, &self, &node, &intersect, depth, options, sbvh,
+                    ));
+                }
+                return None;
             }
-            None => None, // If there is no intersection, return None
+            None => {
+                //No BVH given so intersect normally
+                match self.closest_intersect(scene) {
+                    Some((node, intersect)) => {
+                        Some(Ray::phong_shade_point(
+                            &scene, &self, &node, &intersect, depth, options, sbvh,
+                        )) // If there is an intersection, shade it
+                    }
+                    None => None, // If there is no intersection, return None
+                }
+            }
         }
     }
 
@@ -136,9 +147,11 @@ impl Ray {
         node: &Node,
         intersect: &Intersection,
         depth: u8,
+        options: &RaytracingOption,
+        bvh: &Option<BVH>,
     ) -> Vector3<f32> {
         let normal = &intersect.normal;
-        let point = intersect.point;
+        let point = intersect.point + normal * 0.0001;
         let incidence = &ray.b;
 
         let material = &node.material;
@@ -172,18 +185,18 @@ impl Ray {
             let mut reflect = Vector3::zeros();
             let reflect_dir = incidence - 2.0 * incidence.dot(&normal) * normal;
             let reflect_ray = Ray::new(point, reflect_dir);
-            if let Some(col) = reflect_ray.shade_ray(scene, depth + 1) {
+            if let Some(col) = reflect_ray.shade_ray(scene, depth + 1, options, bvh) {
                 reflect += col.component_mul(&material.kr)
             }
 
             //Diffuse component (Lambertian)
             let mut diffuse = Vector3::zeros();
             diffuse += material.kd * n_dot_l;
-            for _ in 0..DIFFUSE_RAYS {
+            for _ in 0..options.diffuse_rays {
                 let diffuse_dir = random_unit_vec();
                 let diffuse_ray = Ray::new(point.clone(), diffuse_dir + normal);
-                if let Some(col) = diffuse_ray.shade_ray(scene, depth + 1) {
-                    diffuse += col * DIFFUSE_COEFFICIENT;
+                if let Some(col) = diffuse_ray.shade_ray(scene, depth + 1, options, bvh) {
+                    diffuse += col * options.diffuse_coefficient;
                 }
             }
 
@@ -215,13 +228,11 @@ impl Ray {
                 continue;
             }
             let ray = self.transform(&node.inv_model);
-            if node.primitive.intersect_bounding_box(&ray) {
-                if node.primitive.intersect_ray(&ray).is_some() {
-                    return true;
-                }
+            if node.primitive.intersect_ray(&ray).is_some() {
+                return true;
             }
         }
-        false
+        return false;
     }
     //Cast a set of rays
     pub fn cast_rays(

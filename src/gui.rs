@@ -5,7 +5,7 @@ use crate::{
     node::*,
     primitive::*,
     scene::*,
-    state::{INIT_FILE, SAVE_FILE},
+    state::{RaytracingOption, INIT_FILE, SAVE_FILE},
 };
 use imgui::*;
 use nalgebra::{Point3, Vector3};
@@ -14,14 +14,24 @@ use rhai::Engine;
 use std::time::Instant;
 
 //BUFFER CONSTANTS
-const BUFFER_PROPORTION_INIT: f32 = 0.2;
 const BUFFER_PROPORTION_MIN: f32 = 0.1;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
 //RAY CONSTANTS
-const RAYS_INIT: i32 = 100;
-const RAYS_MIN: i32 = 100;
-const RAYS_MAX: i32 = 10000;
+const RAYS_MIN: u32 = 100;
+const RAYS_MAX: u32 = 10000;
+const MIN_DEPTH: u8 = 5;
+const MAX_DEPTH: u8 = 100;
+const MIN_SAMPLES: u32 = 5;
+const MAX_SAMPLES: u32 = 100;
+const MIN_RANDOM: f64 = 100.0;
+const MAX_RANDOM: f64 = 1000.0;
+
+//DIFFUSE CONSTANTS
+const MIN_DIFFUSE_RAYS: u8 = 5;
+const MAX_DIFFUSE_RAYS: u8 = 100;
+const MIN_DIFFUSE_COEFFICIENT: f32 = 0.0;
+const MAX_DIFFUSE_COEFFICIENT: f32 = 1.0;
 
 //MATERIAL CONSTANTS
 const MIN_D: f32 = 0.0;
@@ -47,14 +57,14 @@ const MAX_ROTATION: f64 = 180.0;
 const MAX_TRANSLATE: f64 = 10.0;
 
 // CAMERA CONSTANTS
-const MIN_FOV: f32 = 10.0;
-const MAX_FOV: f32 = 160.0;
+const MIN_FOV: f64 = 10.0;
+const MAX_FOV: f64 = 160.0;
 //const CAMERA_INIT: f32 = 5.0;
 
 /// Manages all state required for rendering Dear ImGui over `Pixels`test.
 pub enum GuiEvent {
-    BufferResize(f32, f32),
-    CameraUpdate(Camera, f32),
+    RaytracerOption(RaytracingOption),
+    CameraUpdate(Camera),
     SceneLoad(Scene),
     SaveImage(String),
 }
@@ -72,12 +82,9 @@ pub struct Gui {
     engine: Engine,
     scene: Scene,
 
-    pub ray_num: i32,
-
-    buffer_proportion: f32,
+    raytracing_option: RaytracingOption,
 
     camera: Camera,
-    camera_fov: f32,
 
     image_filename: String,
 }
@@ -122,7 +129,7 @@ impl Gui {
         let renderer = imgui_wgpu::Renderer::new(&mut imgui, device, queue, config);
 
         // Return GUI context
-        Self {
+        let mut gui = Self {
             imgui,
             platform,
             renderer,
@@ -135,14 +142,29 @@ impl Gui {
             engine: init_engine(),
             scene: Scene::empty(),
 
-            ray_num: RAYS_INIT,
-            buffer_proportion: BUFFER_PROPORTION_INIT,
+            raytracing_option: RaytracingOption::default(),
 
             camera: Camera::unit(),
-            camera_fov: 110.0,
 
             image_filename: String::from(SAVE_FILE),
+        };
+
+        // ------------ TESTING CODE (LOAD SCENE ON START) -----------------
+        match std::fs::read_to_string(&mut gui.script_filename) {
+            Ok(script) => {
+                gui.script = script;
+            }
+            Err(e) => println!("{}", e),
         }
+        match gui.engine.eval(&gui.script) {
+            Ok(scene) => {
+                gui.scene = scene;
+                gui.event = Some(GuiEvent::SceneLoad(gui.scene.clone()));
+            }
+            Err(e) => println!("{e}"),
+        }
+        // ------------ TESTING CODE (LOAD SCENE ON START) -----------------
+        gui
     }
 
     /// Prepare Dear ImGui.
@@ -183,23 +205,73 @@ impl Gui {
 
         //Raytracing options -------------------------------------------
         if CollapsingHeader::new("Raytracer").build(ui) {
-            // Numbers of rays to render
-            ui.slider("# Rays: ", RAYS_MIN, RAYS_MAX, &mut self.ray_num);
+            // Numbers of rays to render per pass
+            ui.slider(
+                "Rays Per Pass",
+                RAYS_MIN,
+                RAYS_MAX,
+                &mut self.raytracing_option.rays_per_pass,
+            );
             // Proportion of the window the buffer occupies
             ui.slider(
                 "% Buffer: ",
                 BUFFER_PROPORTION_MIN,
                 BUFFER_PROPORTION_MAX,
-                &mut self.buffer_proportion,
+                &mut self.raytracing_option.buffer_proportion,
+            );
+            //Clear colour for scene
+            ui.slider_config("Clear Colour", 0, 255)
+                .build_array(&mut self.raytracing_option.clear_color);
+            //Clear colour if no intersect
+            ui.slider_config("Pixel Clear Colour", 0, 255)
+                .build_array(&mut self.raytracing_option.pixel_clear);
+            //Ray depth slider
+            ui.slider(
+                "Ray Depth",
+                MIN_DEPTH,
+                MAX_DEPTH,
+                &mut self.raytracing_option.ray_depth,
+            );
+            //Ray samples slider
+            ui.slider(
+                "Ray Samples",
+                MIN_SAMPLES,
+                MAX_SAMPLES,
+                &mut self.raytracing_option.ray_samples,
+            );
+            //Ray randomness
+            ui.slider(
+                "Ray Randomness",
+                MIN_RANDOM,
+                MAX_RANDOM,
+                &mut self.raytracing_option.ray_randomness,
+            );
+            //Number of diffuse rays
+            ui.slider(
+                "Diffuse Rays",
+                MIN_DIFFUSE_RAYS,
+                MAX_DIFFUSE_RAYS,
+                &mut self.raytracing_option.diffuse_rays,
+            );
+            //Diffuse Coefficient
+            ui.slider(
+                "Diffuse Coefficient",
+                MIN_DIFFUSE_COEFFICIENT,
+                MAX_DIFFUSE_COEFFICIENT,
+                &mut self.raytracing_option.diffuse_coefficient,
             );
             // Fov of the buffer
-            ui.slider("fov", MIN_FOV, MAX_FOV, &mut self.camera_fov);
+            ui.slider(
+                "fov",
+                MIN_FOV,
+                MAX_FOV,
+                &mut self.raytracing_option.buffer_fov,
+            );
+            // Enable BVH
+            ui.checkbox("Enable BVH", &mut self.raytracing_option.bvh_active);
             // Apply stored changes
             if ui.button("Apply") {
-                self.event = Some(GuiEvent::BufferResize(
-                    self.buffer_proportion,
-                    self.camera_fov,
-                ));
+                self.event = Some(GuiEvent::RaytracerOption(self.raytracing_option.clone()));
             };
         }
         // CAMERA OPTIONS ----------------------------------------
@@ -214,7 +286,7 @@ impl Gui {
                 .build_array(self.camera.up.as_mut_slice());
             if ui.button("Apply Camera") {
                 println!("Camera changed");
-                self.event = Some(GuiEvent::CameraUpdate(self.camera.clone(), self.camera_fov));
+                self.event = Some(GuiEvent::CameraUpdate(self.camera.clone()));
             }
         }
         // SCRIPTING --------------------------------------------
@@ -318,7 +390,7 @@ impl Gui {
                 for (label, camera) in &self.scene.cameras {
                     if ui.button(label) {
                         self.camera = camera.clone();
-                        self.event = Some(GuiEvent::CameraUpdate(camera.clone(), self.camera_fov));
+                        self.event = Some(GuiEvent::CameraUpdate(camera.clone()));
                     }
                 }
             }
