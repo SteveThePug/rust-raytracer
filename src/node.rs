@@ -1,12 +1,13 @@
-use crate::{material::Material, primitive::*};
+use crate::{bvh::AABB, material::Material, primitive::*};
 use nalgebra::{Matrix4, Vector3};
-use std::rc::Rc;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct Node {
     //Primitive
-    pub primitive: Rc<dyn Primitive>,
+    pub primitive: Arc<dyn Primitive>,
     pub material: Material,
+    pub aabb: AABB,
     //Transformations
     pub rotation: [f64; 3],
     pub scale: [f64; 3],
@@ -20,10 +21,12 @@ pub struct Node {
 
 impl Node {
     //New node with no transformations
-    pub fn new(primitive: Rc<dyn Primitive>, material: Material) -> Node {
+    pub fn new(primitive: Arc<dyn Primitive>, material: Material) -> Node {
+        let aabb = primitive.get_aabb();
         Node {
             primitive,
             material,
+            aabb,
             rotation: [0.0, 0.0, 0.0],
             scale: [1.0, 1.0, 1.0],
             translation: [0.0, 0.0, 0.0],
@@ -34,7 +37,7 @@ impl Node {
         }
     }
     //New node with parent transformations
-    pub fn child(self, primitive: Rc<dyn Primitive>) -> Node {
+    pub fn child(self, primitive: Arc<dyn Primitive>) -> Node {
         let mut child = self.clone();
         child.primitive = primitive;
         child
@@ -93,5 +96,6 @@ impl Node {
         self.model = (translation_matrix * rotation_matrix * scale_matrix).cast();
         // Compute the inverse model matrix by inverting the model matrix
         self.inv_model = self.model.try_inverse().unwrap();
+        self.aabb.transform_mut(&self.model);
     }
 }

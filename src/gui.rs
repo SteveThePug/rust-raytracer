@@ -210,7 +210,7 @@ impl Gui {
                 "Rays Per Pass",
                 RAYS_MIN,
                 RAYS_MAX,
-                &mut self.raytracing_option.rays_per_pass,
+                &mut self.raytracing_option.pixels_per_pass,
             );
             // Proportion of the window the buffer occupies
             ui.slider(

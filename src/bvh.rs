@@ -260,9 +260,7 @@ impl BVH {
 
         for i in 0..prim_count {
             let node = &self.nodes[first_prim + i]; //Get the node from the Vec<Node>
-            let mut node_aabb = node.primitive.get_aabb(); //Get the primitive's AABB
-            node_aabb.transform_mut(&node.model); //Transform the AABB to world coordinates
-            bvh_node_aabb.join_mut(&node_aabb); //Join it with the BVH node's AABB
+            bvh_node_aabb.join_mut(&node.aabb); //Join it with the BVH node's AABB
         }
 
         // unsafe {
@@ -310,9 +308,7 @@ impl BVH {
         //     for i in 0..self.bvh_nodes[index].prim_count {
         //         let node = &self.nodes[first_prim_idx + i];
         //         //Get the centroid of the bounding box
-        //         let centroid = node.primitive.get_aabb().get_centroid();
-        //         //Place the centroid into world coordinates
-        //         let world_centroid = node.model.transform_point(&centroid);
+        //         let centroid = node.aabb.get_centroid();
         //         //Get the candidate position
         //         let candidate_pos = world_centroid[axis];
         //         let cost = self.evaluate_sah(&self.bvh_nodes[index], axis, candidate_pos);
@@ -340,8 +336,7 @@ impl BVH {
             while i <= j {
                 //Perform a quicksort dependent on location
                 let node = &self.nodes[i]; // Node we would like to sort
-                let centroid = node.primitive.get_aabb().get_centroid(); //Centroid of node we would like to sort
-                let centroid = node.model.transform_point(&centroid); //Transform to world coordinates
+                let centroid = node.aabb.get_centroid(); //Centroid of node we would like to sort
                 if centroid[axis] < split_pos {
                     i += 1; // On Left-Hand-Side
                 } else {

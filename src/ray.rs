@@ -86,20 +86,23 @@ impl Ray {
             if !node.active {
                 continue;
             }
-            // Transform ray into local model cordinates
-            let ray = self.transform(&node.inv_model);
-            // Check primitive intersection
-            if let Some(intersect) = node.primitive.intersect_ray(&ray) {
-                // Dont intersect with itself
-                if intersect.distance < EPSILON {
-                    continue;
-                }
-                // Check for closest distance by converting to world coords
-                let intersect = intersect.transform(&node.model, &node.inv_model);
-                let distance = distance(&ray.a, &intersect.point);
-                if distance < closest_distance {
-                    closest_distance = distance;
-                    closest_intersect = Some((node, intersect));
+
+            if node.aabb.intersect_ray(&self) {
+                // Transform ray into local model cordinates
+                let ray = self.transform(&node.inv_model);
+                // Check primitive intersection
+                if let Some(intersect) = node.primitive.intersect_ray(&ray) {
+                    // Dont intersect with itself
+                    if intersect.distance < EPSILON {
+                        continue;
+                    }
+                    // Check for closest distance by converting to world coords
+                    let intersect = intersect.transform(&node.model, &node.inv_model);
+                    let distance = distance(&ray.a, &intersect.point);
+                    if distance < closest_distance {
+                        closest_distance = distance;
+                        closest_intersect = Some((node, intersect));
+                    }
                 }
             }
         }
@@ -113,10 +116,12 @@ impl Ray {
         options: &RaytracingOption,
         sbvh: &Option<BVH>,
     ) -> Option<Vector3<f32>> {
+        //If we have exceeded depth then return
         if depth == options.ray_depth {
             return None;
         }
         match sbvh {
+            //We have a bvh so use bvh traversal
             Some(bvh) => {
                 //Intersect the scene with the bvh
                 if let Some((node, intersect)) = bvh.traverse(&self, 0) {
@@ -126,6 +131,7 @@ impl Ray {
                 }
                 return None;
             }
+            //We dont have a bvh so use generic algorithm
             None => {
                 //No BVH given so intersect normally
                 match self.closest_intersect(scene) {
@@ -175,7 +181,7 @@ impl Ray {
 
             //Niave Shadows
             let to_light_ray = Ray::new(point, to_light);
-            if to_light_ray.light_blocked(scene, node) {
+            if to_light_ray.light_blocked(scene, node, bvh) {
                 continue;
             }
 
@@ -202,37 +208,55 @@ impl Ray {
 
             //Specular component
             let mut specular = Vector3::zeros();
-            if n_dot_l < 0.0 {
+            if n_dot_l > 0.0 {
                 let h = (to_light - incidence).normalize();
                 let n_dot_h = normal.dot(&h).max(0.0) as f32;
                 specular = material.ks * n_dot_h.powf(material.shininess);
             }
 
             //Falloff
-            // let falloff = 1.0
-            //     / (1.0
-            //         + light.falloff[0]
-            //         + light.falloff[1] * light_distance
-            //         + light.falloff[2] * light_distance * light_distance);
+            let falloff = 1.0
+                / ((1.0 + light.falloff[0])
+                    + light.falloff[1] * light_distance
+                    + light.falloff[2] * light_distance * light_distance);
 
-            let intensity = light.colour.component_mul(&(diffuse + reflect + specular));
+            let intensity = light.colour.component_mul(&(diffuse + reflect + specular)) * falloff;
             colour += &intensity;
         }
 
         colour
     }
 
-    pub fn light_blocked(&self, scene: &Scene, _node: &Node) -> bool {
-        for (_, node) in &scene.nodes {
-            if !node.active {
-                continue;
+    pub fn light_blocked(&self, scene: &Scene, _node: &Node, bvh: &Option<BVH>) -> bool {
+        match bvh {
+            Some(bvh) => {
+                //We have a bvh so use bvh traversal
+                for (_, node) in &scene.nodes {
+                    if !node.active {
+                        continue;
+                    }
+                    match bvh.traverse(&self, 0) {
+                        Some(_) => return true,
+                        None => continue,
+                    }
+                }
+                return false;
             }
-            let ray = self.transform(&node.inv_model);
-            if node.primitive.intersect_ray(&ray).is_some() {
-                return true;
+            None => {
+                for (_, node) in &scene.nodes {
+                    if !node.active {
+                        continue;
+                    }
+                    if node.aabb.intersect_ray(self) {
+                        let ray = self.transform(&node.inv_model);
+                        if node.primitive.intersect_ray(&ray).is_some() {
+                            return true;
+                        }
+                    }
+                }
+                return false;
             }
         }
-        return false;
     }
     //Cast a set of rays
     pub fn cast_rays(

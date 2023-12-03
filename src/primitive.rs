@@ -9,9 +9,9 @@ use nalgebra::{distance, Point3, Vector3};
 use roots::{find_roots_quadratic, find_roots_quartic, Roots};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::rc::Rc;
+use std::sync::Arc;
 // PRIMITIVE TRAIT -----------------------------------------------------------------
-pub trait Primitive {
+pub trait Primitive: Send + Sync {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection>;
     fn get_aabb(&self) -> AABB;
 }
@@ -24,11 +24,11 @@ pub struct Sphere {
 }
 
 impl Sphere {
-    pub fn new(position: Point3<f64>, radius: f64) -> Rc<dyn Primitive> {
-        Rc::new(Sphere { position, radius })
+    pub fn new(position: Point3<f64>, radius: f64) -> Arc<dyn Primitive> {
+        Arc::new(Sphere { position, radius })
     }
 
-    pub fn unit() -> Rc<dyn Primitive> {
+    pub fn unit() -> Arc<dyn Primitive> {
         Sphere::new(Point3::new(0.0, 0.0, 0.0), 1.0)
     }
 }
@@ -88,10 +88,10 @@ pub struct Circle {
 }
 
 impl Circle {
-    pub fn new(position: Point3<f64>, radius: f64, normal: Vector3<f64>) -> Rc<dyn Primitive> {
+    pub fn new(position: Point3<f64>, radius: f64, normal: Vector3<f64>) -> Arc<dyn Primitive> {
         let normal = normal.normalize();
         let constant = normal.dot(&position.coords);
-        Rc::new(Circle {
+        Arc::new(Circle {
             position,
             radius,
             normal,
@@ -99,7 +99,18 @@ impl Circle {
         })
     }
 
-    pub fn unit() -> Rc<dyn Primitive> {
+    pub fn new_unboxed(position: Point3<f64>, radius: f64, normal: Vector3<f64>) -> Circle {
+        let normal = normal.normalize();
+        let constant = normal.dot(&position.coords);
+        Circle {
+            position,
+            radius,
+            normal,
+            constant,
+        }
+    }
+
+    pub fn unit() -> Arc<dyn Primitive> {
         let position = Point3::new(0.0, 0.0, 0.0);
         let normal = Vector3::new(0.0, 0.0, -1.0);
         let radius = 1.0;
@@ -147,23 +158,23 @@ impl Primitive for Circle {
 pub struct Cylinder {
     radius: f64,
     height: f64,
-    base_circle: Rc<dyn Primitive>,
-    top_circle: Rc<dyn Primitive>,
+    base_circle: Circle,
+    top_circle: Circle,
 }
 
 impl Cylinder {
-    pub fn new(radius: f64, height: f64) -> Rc<dyn Primitive> {
-        let base_circle = Circle::new(
+    pub fn new(radius: f64, height: f64) -> Arc<dyn Primitive> {
+        let base_circle = Circle::new_unboxed(
             Point3::new(0.0, 0.0, 0.0),
             radius,
             Vector3::new(0.0, -1.0, 0.0),
         );
-        let top_circle = Circle::new(
+        let top_circle = Circle::new_unboxed(
             Point3::new(0.0, height, 0.0),
             radius,
             Vector3::new(0.0, 1.0, 0.0),
         );
-        Rc::new(Cylinder {
+        Arc::new(Cylinder {
             radius,
             height,
             base_circle,
@@ -264,24 +275,24 @@ impl Primitive for Cylinder {
 pub struct Cone {
     height: f64,
     constant: f64,
-    circle: Rc<dyn Primitive>,
+    circle: Circle,
 }
 
 impl Cone {
-    pub fn new(radius: f64, height: f64) -> Rc<dyn Primitive> {
-        let circle = Circle::new(
+    pub fn new(radius: f64, height: f64) -> Arc<dyn Primitive> {
+        let circle = Circle::new_unboxed(
             Point3::new(0.0, 0.0, 0.0),
             radius,
             Vector3::new(0.0, -1.0, 0.0),
         );
         let constant = radius * radius / (height * height);
-        Rc::new(Cone {
+        Arc::new(Cone {
             height,
             constant,
             circle,
         })
     }
-    pub fn unit() -> Rc<dyn Primitive> {
+    pub fn unit() -> Arc<dyn Primitive> {
         Cone::new(0.5, 1.0)
     }
 
@@ -378,11 +389,11 @@ impl Primitive for Cone {
 //         width_direction: Vector3<f64>,
 //         width: f64,
 //         height: f64,
-//     ) -> Rc<dyn Primitive> {
+//     ) -> Arc<dyn Primitive> {
 //         let normal = normal.normalize();
 //         let width_direction = width_direction.normalize();
 //         let height_direction = width_direction.cross(&normal);
-//         Rc::new(Rectangle {
+//         Arc::new(Rectangle {
 //             position,
 //             normal: normal.normalize(),
 //             width_direction: width_direction.normalize(),
@@ -390,7 +401,7 @@ impl Primitive for Cone {
 //             height,
 //         })
 //     }
-//     pub fn unit() -> Rc<dyn Primitive> {
+//     pub fn unit() -> Arc<dyn Primitive> {
 //         Rectangle::new(
 //             Point3::new(0.0, 0.0, 0.0),
 //             Vector3::new(0.0, 1.0, 0.0),
@@ -450,11 +461,15 @@ pub struct Cube {
 }
 
 impl Cube {
-    pub fn new(bln: Point3<f64>, trf: Point3<f64>) -> Rc<dyn Primitive> {
-        Rc::new(Cube { bln, trf })
+    pub fn new(bln: Point3<f64>, trf: Point3<f64>) -> Arc<dyn Primitive> {
+        Arc::new(Cube { bln, trf })
     }
 
-    pub fn unit() -> Rc<dyn Primitive> {
+    pub fn new_unboxed(bln: Point3<f64>, trf: Point3<f64>) -> Cube {
+        Cube { bln, trf }
+    }
+
+    pub fn unit() -> Arc<dyn Primitive> {
         let bln = Point3::new(-1.0, -1.0, -1.0);
         let trf = Point3::new(1.0, 1.0, 1.0);
         Cube::new(bln, trf)
@@ -479,12 +494,12 @@ impl Primitive for Cube {
             let intersect = ray.at_t(tmin);
 
             // Check if the intersection is outside the box
-            if intersect.x < bln.x
-                || intersect.x > trf.x
-                || intersect.y < bln.y
-                || intersect.y > trf.y
-                || intersect.z < bln.z
-                || intersect.z > trf.z
+            if intersect.x < bln.x - EPSILON
+                || intersect.x > trf.x + EPSILON
+                || intersect.y < bln.y - EPSILON
+                || intersect.y > trf.y + EPSILON
+                || intersect.z < bln.z - EPSILON
+                || intersect.z > trf.z + EPSILON
             {
                 return None; // Intersection is outside the box
             }
@@ -507,7 +522,7 @@ impl Primitive for Cube {
 
             Some(Intersection {
                 point: intersect,
-                normal: normal,
+                normal,
                 distance: tmin,
             })
         } else {
@@ -533,14 +548,14 @@ pub struct Triangle {
 }
 
 impl Triangle {
-    pub fn new(u: Point3<f64>, v: Point3<f64>, w: Point3<f64>) -> Rc<dyn Primitive> {
+    pub fn new(u: Point3<f64>, v: Point3<f64>, w: Point3<f64>) -> Arc<dyn Primitive> {
         let uv = v - u;
         let uw = w - u;
         let normal = uw.cross(&uv).normalize();
-        Rc::new(Triangle { u, v, w, normal })
+        Arc::new(Triangle { u, v, w, normal })
     }
     #[allow(dead_code)]
-    pub fn unit() -> Rc<dyn Primitive> {
+    pub fn unit() -> Arc<dyn Primitive> {
         let u = Point3::new(-1.0, -1.0, 0.0);
         let v = Point3::new(0.0, 1.0, 0.0);
         let w = Point3::new(1.0, -1.0, 0.0);
@@ -606,10 +621,10 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn new(triangles: Vec<Triangle>) -> Rc<dyn Primitive> {
+    pub fn new(triangles: Vec<Triangle>) -> Arc<dyn Primitive> {
         // Calculate the bounding box for the entire mesh based on the bounding boxes of individual triangles
         let bounding_box = Mesh::compute_bounding_box(&triangles);
-        Rc::new(Mesh { triangles })
+        Arc::new(Mesh { triangles })
     }
 
     fn compute_bounding_box(triangles: &Vec<Triangle>) -> AABB {
@@ -626,7 +641,7 @@ impl Mesh {
         AABB::new(bln, trf)
     }
 
-    pub fn from_file(filename: &str) -> Rc<dyn Primitive> {
+    pub fn from_file(filename: &str) -> Arc<dyn Primitive> {
         let mut triangles: Vec<Triangle> = Vec::new();
         let mut vertices: Vec<Point3<f64>> = Vec::new();
 
@@ -713,9 +728,9 @@ pub struct Torus {
 }
 
 impl Torus {
-    pub fn new(inner_rad: f64, outer_rad: f64) -> Rc<dyn Primitive> {
+    pub fn new(inner_rad: f64, outer_rad: f64) -> Arc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        Rc::new(Torus {
+        Arc::new(Torus {
             inner_rad,
             outer_rad,
         })
@@ -834,28 +849,28 @@ impl Primitive for Torus {
 // GNOMON -----------------------------------------------------------------
 #[derive(Clone)]
 pub struct Gnonom {
-    x_cube: Rc<dyn Primitive>,
-    y_cube: Rc<dyn Primitive>,
-    z_cube: Rc<dyn Primitive>,
+    x_cube: Cube,
+    y_cube: Cube,
+    z_cube: Cube,
 }
 
 impl Gnonom {
     const GNONOM_WIDTH: f64 = 0.1;
     const GNONOM_LENGTH: f64 = 2.0;
-    pub fn new() -> Rc<dyn Primitive> {
-        let x_cube = Cube::new(
+    pub fn new() -> Arc<dyn Primitive> {
+        let x_cube = Cube::new_unboxed(
             Point3::new(0.0, -Self::GNONOM_WIDTH, -Self::GNONOM_WIDTH),
             Point3::new(Self::GNONOM_LENGTH, Self::GNONOM_WIDTH, Self::GNONOM_WIDTH),
         );
-        let y_cube = Cube::new(
+        let y_cube = Cube::new_unboxed(
             Point3::new(-Self::GNONOM_WIDTH, 0.0, -Self::GNONOM_WIDTH),
             Point3::new(Self::GNONOM_WIDTH, Self::GNONOM_LENGTH, Self::GNONOM_WIDTH),
         );
-        let z_cube = Cube::new(
+        let z_cube = Cube::new_unboxed(
             Point3::new(-Self::GNONOM_WIDTH, -Self::GNONOM_WIDTH, 0.0),
             Point3::new(Self::GNONOM_WIDTH, Self::GNONOM_WIDTH, Self::GNONOM_LENGTH),
         );
-        Rc::new(Gnonom {
+        Arc::new(Gnonom {
             x_cube,
             y_cube,
             z_cube,
@@ -901,9 +916,9 @@ impl Primitive for Gnonom {
 pub struct CrossCap {}
 
 impl CrossCap {
-    pub fn new() -> Rc<dyn Primitive> {
+    pub fn new() -> Arc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        Rc::new(CrossCap {})
+        Arc::new(CrossCap {})
     }
 }
 
@@ -992,9 +1007,9 @@ pub struct CrossCap2 {
 }
 
 impl CrossCap2 {
-    pub fn new(p: f64, q: f64) -> Rc<dyn Primitive> {
+    pub fn new(p: f64, q: f64) -> Arc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        Rc::new(CrossCap2 { p, q })
+        Arc::new(CrossCap2 { p, q })
     }
 }
 
@@ -1105,9 +1120,9 @@ impl Primitive for CrossCap2 {
 pub struct Steiner {}
 
 impl Steiner {
-    pub fn new() -> Rc<dyn Primitive> {
+    pub fn new() -> Arc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        Rc::new(Steiner {})
+        Arc::new(Steiner {})
     }
 }
 
@@ -1182,9 +1197,9 @@ impl Primitive for Steiner {
 pub struct Steiner2 {}
 
 impl Steiner2 {
-    pub fn new() -> Rc<dyn Primitive> {
+    pub fn new() -> Arc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        Rc::new(Steiner2 {})
+        Arc::new(Steiner2 {})
     }
 }
 
@@ -1272,9 +1287,9 @@ pub struct Roman {
 }
 
 impl Roman {
-    pub fn new(k: f64) -> Rc<dyn Primitive> {
+    pub fn new(k: f64) -> Arc<dyn Primitive> {
         // I need to find the bounding box for this shape
-        Rc::new(Roman { k })
+        Arc::new(Roman { k })
     }
 }
 
