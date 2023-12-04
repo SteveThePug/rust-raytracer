@@ -1,7 +1,7 @@
 use crate::{
     bvh::AABB,
     material::Material,
-    primitive::{self, *},
+    primitive::{*},
     ray::{Intersection, Ray},
 };
 use nalgebra::{Matrix4, Vector3};

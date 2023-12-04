@@ -6,7 +6,7 @@ use error_iter::ErrorIter;
 const EPSILON: f64 = 1e-8;
 const INFINITY: f64 = 1e10;
 
-use gui::{init_engine, Gui};
+use gui::{init_engine};
 use log::error;
 use nalgebra::Vector3;
 use rand::random;
