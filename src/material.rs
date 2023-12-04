@@ -10,10 +10,10 @@ pub struct Material {
 }
 
 impl Material {
-    pub fn new(kd: Vector3<f64>, ks: Vector3<f64>, shininess: f64) -> Material {
+    pub fn new(kd: Vector3<f64>, ks: Vector3<f64>, kr: Vector3<f64>, shininess: f64) -> Material {
         let kd = kd.cast();
         let ks = ks.cast();
-        let kr = ks.cast();
+        let kr = kr.cast();
         let shininess = shininess as f32;
         Material {
             kd,

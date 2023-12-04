@@ -28,6 +28,8 @@ const MIN_SAMPLES: u32 = 1;
 const MAX_SAMPLES: u32 = 10;
 const MIN_RANDOM: f64 = 100.0;
 const MAX_RANDOM: f64 = 1000.0;
+const MIN_EPSILON: f64 = 1e-11;
+const MAX_EPSILON: f64 = 1.0;
 
 //DIFFUSE CONSTANTS
 const MIN_DIFFUSE_RAYS: u8 = 1;
@@ -239,6 +241,13 @@ impl Gui {
                 MIN_DEPTH,
                 MAX_DEPTH,
                 &mut self.raytracing_option.ray_depth,
+            );
+            //Epsilon slider
+            ui.slider(
+                "Epsilon",
+                MIN_EPSILON,
+                MAX_EPSILON,
+                &mut self.raytracing_option.epsilon,
             );
             //Ray samples slider
             ui.slider(

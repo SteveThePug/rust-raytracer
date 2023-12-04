@@ -1,5 +1,5 @@
-use crate::{bvh::BVH, node::Node, scene::Scene, state::RaytracingOption, EPSILON};
-use nalgebra::{distance, Matrix4, Point3, Vector3};
+use crate::{bvh::BVH, light::Light, node::Node, scene::Scene, state::RaytracingOption, EPSILON};
+use nalgebra::{distance, Matrix3, Matrix4, Point3, Vector3};
 use rand;
 
 fn random_vec() -> Vector3<f64> {
@@ -18,9 +18,16 @@ pub struct Intersection {
 }
 //Intersection point including point and normal
 impl Intersection {
-    pub fn transform_mut(&mut self, trans: &Matrix4<f64>, inv_trans: &Matrix4<f64>) {
+    pub fn transform(&mut self, trans: &Matrix4<f64>, inv_trans: &Matrix4<f64>) -> Intersection {
+        Intersection {
+            point: trans.transform_point(&self.point),
+            normal: inv_trans.transpose().transform_vector(&self.normal),
+            distance: self.distance,
+        }
+    }
+    pub fn transform_mut(&mut self, trans: &Matrix4<f64>, inv_transpose: &Matrix3<f64>) {
         self.point = trans.transform_point(&self.point);
-        self.normal = inv_trans.transpose().transform_vector(&self.normal);
+        self.normal = inv_transpose * self.normal;
     }
 }
 
@@ -94,10 +101,6 @@ impl Ray {
             if node.aabb.intersect_ray(&ray) {
                 //Check node intersection
                 if let Some(intersect) = node.intersect_ray(&ray) {
-                    // Dont intersect with own primitive
-                    if intersect.distance < EPSILON {
-                        continue;
-                    }
                     // Check for closest distance by converting to world coords
                     let distance = distance(&ray_a, &intersect.point);
                     if distance < closest_distance {
@@ -182,7 +185,7 @@ impl Ray {
             //Niave Shadows
             if options.shadows {
                 let to_light_ray = Ray::new(*point, to_light);
-                if to_light_ray.light_blocked(scene, node, bvh) {
+                if to_light_ray.light_blocked(scene, light, bvh) {
                     continue;
                 }
             }
@@ -238,7 +241,8 @@ impl Ray {
         colour
     }
 
-    pub fn light_blocked(&self, scene: &Scene, _node: &Node, bvh: &Option<BVH>) -> bool {
+    pub fn light_blocked(&self, scene: &Scene, light: &Light, bvh: &Option<BVH>) -> bool {
+        let light_distance = distance(&self.a, &light.position);
         match bvh {
             Some(bvh) => {
                 //We have a bvh so use bvh traversal
@@ -247,7 +251,11 @@ impl Ray {
                         continue;
                     }
                     match bvh.traverse(self, 0) {
-                        Some(_) => return true,
+                        Some((_, intersect)) => {
+                            if intersect.distance < light_distance + EPSILON {
+                                return true;
+                            }
+                        }
                         None => continue,
                     }
                 }
@@ -259,14 +267,19 @@ impl Ray {
                         continue;
                     }
                     if node.aabb.intersect_ray(self) {
-                        if node.intersect_ray(self).is_some() {
-                            return true;
+                        match node.intersect_ray(self) {
+                            Some(intersect) => {
+                                if intersect.distance < light_distance {
+                                    return true;
+                                }
+                            }
+                            None => continue,
                         }
                     }
                 }
-                return false;
             }
         }
+        return false;
     }
     //Cast a set of rays
     pub fn cast_rays(

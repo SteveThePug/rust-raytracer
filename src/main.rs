@@ -1,10 +1,11 @@
 use crate::state::run;
 use error_iter::ErrorIter;
 
-const EPSILON: f64 = 1e-8;
+const EPSILON: f64 = 1e-7;
 const INFINITY: f64 = 1e10;
 
 use log::error;
+//use nalgebra::{Matrix4, RowVector4, Vector3, Vector4};
 use std::env;
 use std::error::Error;
 
@@ -23,6 +24,20 @@ fn main() {
     env_logger::init();
     env::set_var("RUST_BACKTRACE", "1");
     //let args: Vec<String> = env::args().collect();
+
+    // let vec = Vector3::new(1.0, 1.0, 1.0);
+    // let translation = Vector3::new(1.0, 1.0, 1.0);
+    // let translation_matrix = Matrix4::new_translation(&translation);
+    // println!(
+    //     "{}, {}",
+    //     translation_matrix,
+    //     translation_matrix.transform_vector(&vec)
+    // );
+    // let mut translation_matrix = translation_matrix.transpose();
+    // translation_matrix.set_row(3, &RowVector4::new(0.0, 0.0, 0.0, 0.0));
+    // println!(
+    //     "{}, {}", //     translation_matrix, //     translation_matrix.transform_vector(&vec)
+    // );
     if let Err(e) = run() {
         println!("Error at runtime: {}", e);
     };
