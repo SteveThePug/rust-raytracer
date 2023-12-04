@@ -1,6 +1,6 @@
 use crate::{camera::Camera, light::Light, material::*, node::*};
 use std::collections::HashMap;
-use std::rc::Rc;
+
 
 // pub struct MultiThreadScene {
 //     pub nodes: Rc<HashMap<String, Node>>,

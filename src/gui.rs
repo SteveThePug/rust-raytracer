@@ -18,18 +18,20 @@ const BUFFER_PROPORTION_MIN: f32 = 0.1;
 const BUFFER_PROPORTION_MAX: f32 = 1.0;
 
 //RAY CONSTANTS
+const MIN_THREADS: u32 = 1;
+const MAX_THREADS: u32 = 12;
 const RAYS_MIN: u32 = 100;
 const RAYS_MAX: u32 = 10000;
-const MIN_DEPTH: u8 = 5;
-const MAX_DEPTH: u8 = 100;
-const MIN_SAMPLES: u32 = 5;
-const MAX_SAMPLES: u32 = 100;
+const MIN_DEPTH: u8 = 1;
+const MAX_DEPTH: u8 = 10;
+const MIN_SAMPLES: u32 = 1;
+const MAX_SAMPLES: u32 = 10;
 const MIN_RANDOM: f64 = 100.0;
 const MAX_RANDOM: f64 = 1000.0;
 
 //DIFFUSE CONSTANTS
-const MIN_DIFFUSE_RAYS: u8 = 5;
-const MAX_DIFFUSE_RAYS: u8 = 100;
+const MIN_DIFFUSE_RAYS: u8 = 1;
+const MAX_DIFFUSE_RAYS: u8 = 10;
 const MIN_DIFFUSE_COEFFICIENT: f32 = 0.0;
 const MAX_DIFFUSE_COEFFICIENT: f32 = 1.0;
 
@@ -205,12 +207,18 @@ impl Gui {
 
         //Raytracing options -------------------------------------------
         if CollapsingHeader::new("Raytracer").build(ui) {
+            ui.slider(
+                "Threads",
+                MIN_THREADS,
+                MAX_THREADS,
+                &mut self.raytracing_option.threads,
+            );
             // Numbers of rays to render per pass
             ui.slider(
                 "Rays Per Pass",
                 RAYS_MIN,
                 RAYS_MAX,
-                &mut self.raytracing_option.pixels_per_pass,
+                &mut self.raytracing_option.pixels_per_thread,
             );
             // Proportion of the window the buffer occupies
             ui.slider(
@@ -521,9 +529,9 @@ pub fn init_engine() -> Engine {
     engine
         .register_type::<Mesh>()
         .register_fn("Mesh", Mesh::from_file);
-    // engine
-    //     .register_type::<Rectangle>()
-    //     .register_fn("Rectange", Rectangle::new)
-    //     .register_fn("RectangleUnit", Rectangle::unit);
+    engine
+        .register_type::<RectangleXY>()
+        .register_fn("Rectange", RectangleXY::new)
+        .register_fn("RectangleUnit", RectangleXY::unit);
     engine
 }

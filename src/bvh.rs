@@ -1,5 +1,5 @@
 use crate::{node::Node, ray::*, EPSILON};
-use nalgebra::{distance, point, Matrix4, Point3, Vector3};
+use nalgebra::{distance, Matrix4, Point3, Vector3};
 use std::collections::HashMap;
 use std::fmt;
 
@@ -386,24 +386,21 @@ impl BVH {
     // Traverse the BVH, 0 will be needed to start at root node
     pub fn traverse(&self, ray: &Ray, idx: usize) -> Option<(&Node, Intersection)> {
         let bvh_node = &self.bvh_nodes[idx];
-        if !bvh_node.aabb.intersect_ray(ray) {
+        if !bvh_node.aabb.intersect_ray(&ray) {
             // No intersection with BVH in world coordinates
             return None;
         }
-        if bvh_node.prim_count > 0 {
+        if bvh_node.prim_count != 0 {
             // Leaf node intersection
             let node_idx = bvh_node.first_prim;
             let node = &self.nodes[node_idx];
             if !node.active {
                 return None;
             }
-            let ray = ray.transform(&node.inv_model); //Transform ray to model coords
-            if let Some(intersect) = node.primitive.intersect_ray(&ray) {
+            if let Some(intersect) = node.intersect_ray(&ray) {
                 if intersect.distance < EPSILON {
                     return None;
                 } else {
-                    // Convert intersect back to world coords
-                    let intersect = intersect.transform(&node.model, &node.inv_model);
                     return Some((node, intersect));
                 }
             }
@@ -438,7 +435,7 @@ impl BVH {
         let mut l_count = 0;
         let mut r_count = 0;
         for i in 0..node.prim_count {
-            let aabb = self.nodes[node.first_prim + i].primitive.get_aabb();
+            let aabb = self.nodes[node.first_prim + i].get_world_aabb();
             if aabb.trf[axis] < pos {
                 l_count += 1;
                 l_aabb.grow_mut(&aabb.trf);

@@ -373,85 +373,51 @@ impl Primitive for Cone {
 }
 
 // RECTANGLE -----------------------------------------------------------------
-// #[derive(Clone)]
-// pub struct Rectangle {
-//     position: Point3<f64>,
-//     normal: Vector3<f64>,
-//     width_direction: Vector3<f64>,
-//     width: f64,
-//     height: f64,
-// }
+// Normal is (0.0, 0.0, 1.0) always facing towards camera at positive z axis
+#[derive(Clone)]
+pub struct RectangleXY {
+    bl: Point3<f64>,
+    tr: Point3<f64>,
+}
 
-// impl Rectangle {
-//     pub fn new(
-//         position: Point3<f64>,
-//         normal: Vector3<f64>,
-//         width_direction: Vector3<f64>,
-//         width: f64,
-//         height: f64,
-//     ) -> Arc<dyn Primitive> {
-//         let normal = normal.normalize();
-//         let width_direction = width_direction.normalize();
-//         let height_direction = width_direction.cross(&normal);
-//         Arc::new(Rectangle {
-//             position,
-//             normal: normal.normalize(),
-//             width_direction: width_direction.normalize(),
-//             width,
-//             height,
-//         })
-//     }
-//     pub fn unit() -> Arc<dyn Primitive> {
-//         Rectangle::new(
-//             Point3::new(0.0, 0.0, 0.0),
-//             Vector3::new(0.0, 1.0, 0.0),
-//             Vector3::new(1.0, 0.0, 0.0),
-//             2.0,
-//             2.0,
-//         )
-//     }
-// }
+impl RectangleXY {
+    pub fn new(bl: Point3<f64>, tr: Point3<f64>) -> Arc<dyn Primitive> {
+        Arc::new(RectangleXY { bl, tr })
+    }
+    pub fn unit() -> Arc<dyn Primitive> {
+        RectangleXY::new(Point3::new(-1.0, -1.0, 0.0), Point3::new(1.0, 1.0, 0.0))
+    }
+}
 
-// impl Primitive for Rectangle {
-//     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-//         let constant = self.position.coords.dot(&self.normal);
-//         let denominator = ray.b.dot(&self.normal);
-//         let t = (constant - ray.a.coords.dot(&self.normal)) / denominator;
+impl Primitive for RectangleXY {
+    fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let z = self.bl.z;
+        let az = ray.a.z;
+        let bz = ray.b.z;
+        let t = (z - az) / bz;
+        if t > INFINITY {
+            return None;
+        }
+        let intersect = ray.at_t(t);
+        let (ix, iy) = (intersect.x, intersect.y);
 
-//         if t > INFINITY {
-//             return None;
-//         }
+        if (ix < self.bl.x) || (ix > self.tr.x) || (iy < self.bl.y) || (iy > self.tr.y) {
+            return None;
+        }
 
-//         let intersect = ray.at_t(t);
-//         let height_direction = self.width_direction.cross(&self.normal);
-//         let (w2, h2) = (self.width / 2.0, self.height / 2.0);
-//         let r1 = w2 * self.width_direction;
-//         let r2 = h2 * height_direction;
-//         let pi = intersect - self.position;
-//         let pi_dot_r1 = pi.dot(&r1);
-//         let pi_dot_r2 = pi.dot(&r2);
+        Some(Intersection {
+            point: intersect,
+            normal: Vector3::new(0.0, 0.0, 1.0),
+            distance: t,
+        })
+    }
 
-//         if pi_dot_r1 >= -w2 && pi_dot_r1 <= w2 && pi_dot_r2 >= -h2 && pi_dot_r2 <= h2 {
-//             return Some(Intersection {
-//                 point: intersect,
-//                 normal: self.normal,
-//                 distance: t,
-//             });
-//         }
-//         None
-//     }
-
-//     fn get_bounding_box(&self) -> AABB {
-//         let position = self.position;
-//         let width = self.width;
-//         let height = self.height;
-//         let width_direction = self.width_direction;
-//         let bln = position - width / 2.0 * width_direction - height / 2.0 * height_direction;
-//         let trf = position + width / 2.0 * width_direction + height / 2.0 * height_direction;
-//         AABB::new(bln, trf);
-//         todo!()
-//     }
-// }
+    fn get_aabb(&self) -> AABB {
+        let bl = self.bl + Vector3::new(0.0, 0.0, -0.1);
+        let tr = self.tr + Vector3::new(0.0, 0.0, 0.1);
+        AABB::new(bl, tr)
+    }
+}
 
 // Cube -----------------------------------------------------------------
 #[derive(Clone)]
@@ -623,7 +589,7 @@ pub struct Mesh {
 impl Mesh {
     pub fn new(triangles: Vec<Triangle>) -> Arc<dyn Primitive> {
         // Calculate the bounding box for the entire mesh based on the bounding boxes of individual triangles
-        let bounding_box = Mesh::compute_bounding_box(&triangles);
+        let _bounding_box = Mesh::compute_bounding_box(&triangles);
         Arc::new(Mesh { triangles })
     }
 

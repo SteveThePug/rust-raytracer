@@ -1,4 +1,9 @@
-use crate::{bvh::AABB, material::Material, primitive::*};
+use crate::{
+    bvh::AABB,
+    material::Material,
+    primitive::{self, *},
+    ray::{Intersection, Ray},
+};
 use nalgebra::{Matrix4, Vector3};
 use std::sync::Arc;
 
@@ -97,5 +102,18 @@ impl Node {
         // Compute the inverse model matrix by inverting the model matrix
         self.inv_model = self.model.try_inverse().unwrap();
         self.aabb.transform_mut(&self.model);
+    }
+    // Intersection of a ray, will convert to model coords and check
+    pub fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let ray = ray.transform(&self.inv_model); //Transform from world coordinates
+        if let Some(mut intersect) = self.primitive.intersect_ray(&ray) {
+            intersect.transform_mut(&self.model, &self.inv_model); //Transform to world coords
+            return Some(intersect);
+        }
+        return None;
+    }
+    //Gets the bounding box in world coords
+    pub fn get_world_aabb(&self) -> AABB {
+        return self.aabb.clone();
     }
 }

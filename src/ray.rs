@@ -18,14 +18,9 @@ pub struct Intersection {
 }
 //Intersection point including point and normal
 impl Intersection {
-    pub fn transform(&self, trans: &Matrix4<f64>, inv_trans: &Matrix4<f64>) -> Intersection {
-        let point = trans.transform_point(&self.point);
-        let normal = inv_trans.transpose().transform_vector(&self.normal);
-        Intersection {
-            point,
-            normal,
-            distance: self.distance,
-        }
+    pub fn transform_mut(&mut self, trans: &Matrix4<f64>, inv_trans: &Matrix4<f64>) {
+        self.point = trans.transform_point(&self.point);
+        self.normal = inv_trans.transpose().transform_vector(&self.normal);
     }
 }
 
@@ -62,15 +57,20 @@ impl Ray {
             b: trans.transform_vector(&self.b),
         }
     }
+    //Transform mutably
+    pub fn transform_mut(&mut self, trans: &Matrix4<f64>) {
+        self.a = trans.transform_point(&self.a);
+        self.b = trans.transform_vector(&self.b);
+    }
     //This function will determine if the ray hits an object in the scene
     //This is not optimised as it does not include bounding boxes
-    pub fn hit_scene(&self, scene: &Scene) -> bool {
+    pub fn hit_scene(ray: &Ray, scene: &Scene) -> bool {
         for (_, node) in &scene.nodes {
             if !node.active {
                 continue;
             }
             // Transform ray into local model cordinates
-            let ray = self.transform(&node.inv_model);
+            let ray = ray.transform(&node.inv_model);
             if node.primitive.intersect_ray(&ray).is_some() {
                 return true;
             }
@@ -79,26 +79,31 @@ impl Ray {
     }
     //This function find the closest intersection point of a ray with an object in the scene
     //Also not optimised, as it does not include bounding boxes
-    pub fn closest_intersect<'a>(&'a self, scene: &'a Scene) -> Option<(&Node, Intersection)> {
+    pub fn closest_intersect<'a>(
+        ray: &'a Ray,
+        scene: &'a Scene,
+    ) -> Option<(&'a Node, Intersection)> {
         let mut closest_distance = f64::MAX;
         let mut closest_intersect: Option<(&Node, Intersection)> = None;
+        let ray_a = ray.a;
         for (_, node) in &scene.nodes {
+            //position of ray in world coords
             if !node.active {
                 continue;
             }
 
-            if node.aabb.intersect_ray(&self) {
-                // Transform ray into local model cordinates
-                let ray = self.transform(&node.inv_model);
+            if node.aabb.intersect_ray(&ray) {
+                // Transform ray into model cordinates
+                let ray = ray.transform(&node.inv_model);
                 // Check primitive intersection
-                if let Some(intersect) = node.primitive.intersect_ray(&ray) {
-                    // Dont intersect with itself
+                if let Some(mut intersect) = node.primitive.intersect_ray(&ray) {
+                    // Dont intersect with own primitive
                     if intersect.distance < EPSILON {
                         continue;
                     }
                     // Check for closest distance by converting to world coords
-                    let intersect = intersect.transform(&node.model, &node.inv_model);
-                    let distance = distance(&ray.a, &intersect.point);
+                    intersect.transform_mut(&node.model, &node.inv_model);
+                    let distance = distance(&ray_a, &intersect.point);
                     if distance < closest_distance {
                         closest_distance = distance;
                         closest_intersect = Some((node, intersect));
@@ -124,7 +129,7 @@ impl Ray {
             //We have a bvh so use bvh traversal
             Some(bvh) => {
                 //Intersect the scene with the bvh
-                if let Some((node, intersect)) = bvh.traverse(&self, 0) {
+                if let Some((node, intersect)) = bvh.traverse(self, 0) {
                     return Some(Ray::phong_shade_point(
                         &scene, &self, &node, &intersect, depth, options, sbvh,
                     ));
@@ -134,7 +139,7 @@ impl Ray {
             //We dont have a bvh so use generic algorithm
             None => {
                 //No BVH given so intersect normally
-                match self.closest_intersect(scene) {
+                match Ray::closest_intersect(self, scene) {
                     Some((node, intersect)) => {
                         Some(Ray::phong_shade_point(
                             &scene, &self, &node, &intersect, depth, options, sbvh,
@@ -180,10 +185,10 @@ impl Ray {
             let to_light = to_light.normalize();
 
             //Niave Shadows
-            let to_light_ray = Ray::new(point, to_light);
-            if to_light_ray.light_blocked(scene, node, bvh) {
-                continue;
-            }
+            // let to_light_ray = Ray::new(point, to_light);
+            // if to_light_ray.light_blocked(scene, node, bvh) {
+            //     continue;
+            // }
 
             let n_dot_l = normal.dot(&to_light).max(0.0) as f32;
 
@@ -235,7 +240,7 @@ impl Ray {
                     if !node.active {
                         continue;
                     }
-                    match bvh.traverse(&self, 0) {
+                    match bvh.traverse(self, 0) {
                         Some(_) => return true,
                         None => continue,
                     }
