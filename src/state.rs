@@ -37,7 +37,6 @@ pub struct RaytracingOption {
     pub pixel_clear: [u8; 4],
     pub pixels_per_thread: u32,
     pub buffer_proportion: f32,
-    pub epsilon: f64,
     pub buffer_fov: f64,
     pub ray_depth: u8,
     pub diffuse_rays: u8,
@@ -54,13 +53,13 @@ impl RaytracingOption {
         RaytracingOption {
             threads: 12,
             ray_samples: 1,
-            ray_randomness: 100.0,
+            ray_randomness: 700.0,
             clear_color: [0x22, 0x00, 0x11, 0x55],
-            pixel_clear: [0x55, 0x00, 0x22, 0x55],
-            pixels_per_thread: 1000,
-            buffer_proportion: 0.1,
+            pixel_clear: [0x11, 0x00, 0x22, 0x55],
+            pixels_per_thread: 100,
+            buffer_proportion: 1.0,
             buffer_fov: 70.0,
-            ray_depth: 5,
+            ray_depth: 1,
             diffuse_rays: 3,
             diffuse_coefficient: 0.1,
             bvh_active: false,
@@ -69,7 +68,6 @@ impl RaytracingOption {
             reflect: true,
             specular: true,
             falloff: true,
-            epsilon: 1e-6,
         }
     }
 }

@@ -242,13 +242,6 @@ impl Gui {
                 MAX_DEPTH,
                 &mut self.raytracing_option.ray_depth,
             );
-            //Epsilon slider
-            ui.slider(
-                "Epsilon",
-                MIN_EPSILON,
-                MAX_EPSILON,
-                &mut self.raytracing_option.epsilon,
-            );
             //Ray samples slider
             ui.slider(
                 "Ray Samples",

@@ -252,7 +252,7 @@ impl Ray {
                     }
                     match bvh.traverse(self, 0) {
                         Some((_, intersect)) => {
-                            if intersect.distance < light_distance + EPSILON {
+                            if intersect.distance < light_distance {
                                 return true;
                             }
                         }

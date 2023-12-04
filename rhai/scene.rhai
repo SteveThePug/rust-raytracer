@@ -30,7 +30,7 @@ scene.addLight("green", light);
 
 let colour = V(1.0,0.0,0.0);
 let light = Light(pos, colour, falloff);
-light.active(true);
+light.active(false);
 scene.addLight("red", light);
 
 let colour = V(0.7,0.7,0.7);
@@ -91,12 +91,12 @@ rectangle_node1.active(true);
 scene.addNode("rectangle1", rectangle_node1);
 
 //Behind wall
-let rectangle6 = RectangleUnit();
-let rectangle_node6 = Node(rectangle6, white_wall);
-rectangle_node6.rotate(0.0, 180.0, 0.0);
-rectangle_node6.translate(0.0, 0.0, 1.0);
-rectangle_node6.active(true);
-scene.addNode("rectangle6", rectangle_node6);
+// let rectangle6 = RectangleUnit();
+// let rectangle_node6 = Node(rectangle6, white_wall);
+// rectangle_node6.rotate(0.0, 180.0, 0.0);
+// rectangle_node6.translate(0.0, 0.0, 1.0);
+// rectangle_node6.active(true);
+// scene.addNode("rectangle6", rectangle_node6);
 
 //Right wall
 let rectangle2 = RectangleUnit();
