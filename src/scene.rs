@@ -1,24 +1,6 @@
 use crate::{camera::Camera, light::Light, material::*, node::*};
 use std::collections::HashMap;
 
-
-// pub struct MultiThreadScene {
-//     pub nodes: Rc<HashMap<String, Node>>,
-//     pub materials: Rc<HashMap<String, Material>>,
-//     pub lights: Rc<HashMap<String, Light>>,
-//     pub cameras: Rc<HashMap<String, Camera>>,
-// }
-// impl MultiThreadScene {
-//     pub fn from_scene(scene: &Scene) -> MultiThreadScene {
-//         MultiThreadScene {
-//             nodes: Rc::new(scene.nodes.clone()),
-//             materials: Rc::new(scene.materials.clone()),
-//             lights: Rc::new(scene.lights.clone()),
-//             cameras: Rc::new(scene.cameras.clone()),
-//         }
-//     }
-// }
-
 #[derive(Clone)]
 pub struct Scene {
     pub nodes: HashMap<String, Node>,
@@ -52,5 +34,11 @@ impl Scene {
     // Adds a camera to the scene
     pub fn add_camera(&mut self, label: String, camera: Camera) {
         self.cameras.insert(label, camera);
+    }
+    // Compute all matricies for nodes
+    pub fn compute(&mut self) {
+        for (_, node) in &mut self.nodes {
+            node.compute();
+        }
     }
 }

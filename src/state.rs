@@ -42,6 +42,11 @@ pub struct RaytracingOption {
     pub diffuse_rays: u8,
     pub diffuse_coefficient: f32,
     pub bvh_active: bool,
+    pub shadows: bool,
+    pub diffuse: bool,
+    pub reflect: bool,
+    pub specular: bool,
+    pub falloff: bool,
 }
 impl RaytracingOption {
     pub fn default() -> RaytracingOption {
@@ -58,6 +63,11 @@ impl RaytracingOption {
             diffuse_rays: 3,
             diffuse_coefficient: 0.8,
             bvh_active: false,
+            shadows: true,
+            diffuse: true,
+            reflect: true,
+            specular: true,
+            falloff: true,
         }
     }
 }
@@ -228,6 +238,7 @@ impl State {
                         let mut colour: Vector3<f32> = Vector3::zeros();
                         let ray = &rays[*index];
                         for _ in 0..samples {
+                            //Generate a ray in a random direction
                             let point = ray.a;
                             let dir = ray.b;
                             let rx = (random::<f64>() - 0.5) / randomness;

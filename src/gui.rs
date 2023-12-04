@@ -277,6 +277,10 @@ impl Gui {
             );
             // Enable BVH
             ui.checkbox("Enable BVH", &mut self.raytracing_option.bvh_active);
+            ui.checkbox("Enable Shadows", &mut self.raytracing_option.shadows);
+            ui.checkbox("Enable Reflections", &mut self.raytracing_option.reflect);
+            ui.checkbox("Enable Specular", &mut self.raytracing_option.specular);
+            ui.checkbox("Enable Diffuse", &mut self.raytracing_option.diffuse);
             // Apply stored changes
             if ui.button("Apply") {
                 self.event = Some(GuiEvent::RaytracerOption(self.raytracing_option.clone()));
@@ -346,9 +350,7 @@ impl Gui {
         // SCENE --------------------------------------------
         if CollapsingHeader::new("Scene").build(ui) {
             if ui.button("Update Scene") {
-                for (_, node) in &mut self.scene.nodes {
-                    node.compute();
-                }
+                self.scene.compute();
                 self.event = Some(GuiEvent::SceneLoad(self.scene.clone()));
             }
             // Edit transformation of nodes

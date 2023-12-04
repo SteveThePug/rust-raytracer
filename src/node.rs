@@ -1,8 +1,9 @@
 use crate::{
     bvh::AABB,
     material::Material,
-    primitive::{*},
+    primitive::*,
     ray::{Intersection, Ray},
+    EPSILON,
 };
 use nalgebra::{Matrix4, Vector3};
 use std::sync::Arc;
@@ -107,6 +108,9 @@ impl Node {
     pub fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
         let ray = ray.transform(&self.inv_model); //Transform from world coordinates
         if let Some(mut intersect) = self.primitive.intersect_ray(&ray) {
+            if intersect.distance < EPSILON {
+                return None;
+            }
             intersect.transform_mut(&self.model, &self.inv_model); //Transform to world coords
             return Some(intersect);
         }

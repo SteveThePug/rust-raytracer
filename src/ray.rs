@@ -70,8 +70,7 @@ impl Ray {
                 continue;
             }
             // Transform ray into local model cordinates
-            let ray = ray.transform(&node.inv_model);
-            if node.primitive.intersect_ray(&ray).is_some() {
+            if node.intersect_ray(&ray).is_some() {
                 return true;
             }
         }
@@ -93,16 +92,13 @@ impl Ray {
             }
 
             if node.aabb.intersect_ray(&ray) {
-                // Transform ray into model cordinates
-                let ray = ray.transform(&node.inv_model);
-                // Check primitive intersection
-                if let Some(mut intersect) = node.primitive.intersect_ray(&ray) {
+                //Check node intersection
+                if let Some(intersect) = node.intersect_ray(&ray) {
                     // Dont intersect with own primitive
                     if intersect.distance < EPSILON {
                         continue;
                     }
                     // Check for closest distance by converting to world coords
-                    intersect.transform_mut(&node.model, &node.inv_model);
                     let distance = distance(&ray_a, &intersect.point);
                     if distance < closest_distance {
                         closest_distance = distance;
@@ -162,9 +158,8 @@ impl Ray {
         bvh: &Option<BVH>,
     ) -> Vector3<f32> {
         let normal = &intersect.normal;
-        let point = intersect.point + normal * 0.0001;
+        let point = &intersect.point;
         let incidence = &ray.b;
-
         let material = &node.material;
 
         // Compute the ambient light component and set it as base colour
@@ -185,45 +180,56 @@ impl Ray {
             let to_light = to_light.normalize();
 
             //Niave Shadows
-            // let to_light_ray = Ray::new(point, to_light);
-            // if to_light_ray.light_blocked(scene, node, bvh) {
-            //     continue;
-            // }
+            if options.shadows {
+                let to_light_ray = Ray::new(*point, to_light);
+                if to_light_ray.light_blocked(scene, node, bvh) {
+                    continue;
+                }
+            }
 
             let n_dot_l = normal.dot(&to_light).max(0.0) as f32;
 
             //Reflected component
             let mut reflect = Vector3::zeros();
-            let reflect_dir = incidence - 2.0 * incidence.dot(&normal) * normal;
-            let reflect_ray = Ray::new(point, reflect_dir);
-            if let Some(col) = reflect_ray.shade_ray(scene, depth + 1, options, bvh) {
-                reflect += col.component_mul(&material.kr)
+            if options.reflect {
+                let reflect_dir = incidence - 2.0 * incidence.dot(&normal) * normal;
+                let reflect_ray = Ray::new(*point, reflect_dir);
+                if let Some(col) = reflect_ray.shade_ray(scene, depth + 1, options, bvh) {
+                    reflect += col.component_mul(&material.kr)
+                }
             }
 
             //Diffuse component (Lambertian)
             let mut diffuse = Vector3::zeros();
-            diffuse += material.kd * n_dot_l;
-            for _ in 0..options.diffuse_rays {
-                let diffuse_dir = random_unit_vec();
-                let diffuse_ray = Ray::new(point.clone(), diffuse_dir + normal);
-                if let Some(col) = diffuse_ray.shade_ray(scene, depth + 1, options, bvh) {
-                    diffuse += col * options.diffuse_coefficient;
+            if options.diffuse {
+                diffuse += material.kd * n_dot_l;
+                for _ in 0..options.diffuse_rays {
+                    let diffuse_dir = random_unit_vec();
+                    let diffuse_ray = Ray::new(point.clone(), diffuse_dir + normal);
+                    if let Some(col) = diffuse_ray.shade_ray(scene, depth + 1, options, bvh) {
+                        diffuse += col * options.diffuse_coefficient;
+                    }
                 }
             }
 
             //Specular component
             let mut specular = Vector3::zeros();
-            if n_dot_l > 0.0 {
-                let h = (to_light - incidence).normalize();
-                let n_dot_h = normal.dot(&h).max(0.0) as f32;
-                specular = material.ks * n_dot_h.powf(material.shininess);
+            if options.specular {
+                if n_dot_l > 0.0 {
+                    let h = (to_light - incidence).normalize();
+                    let n_dot_h = normal.dot(&h).max(0.0) as f32;
+                    specular = material.ks * n_dot_h.powf(material.shininess);
+                }
             }
 
             //Falloff
-            let falloff = 1.0
-                / ((1.0 + light.falloff[0])
-                    + light.falloff[1] * light_distance
-                    + light.falloff[2] * light_distance * light_distance);
+            let mut falloff = 1.0;
+            if options.falloff {
+                falloff = 1.0
+                    / ((1.0 + light.falloff[0])
+                        + light.falloff[1] * light_distance
+                        + light.falloff[2] * light_distance * light_distance);
+            }
 
             let intensity = light.colour.component_mul(&(diffuse + reflect + specular)) * falloff;
             colour += &intensity;
@@ -253,8 +259,7 @@ impl Ray {
                         continue;
                     }
                     if node.aabb.intersect_ray(self) {
-                        let ray = self.transform(&node.inv_model);
-                        if node.primitive.intersect_ray(&ray).is_some() {
+                        if node.intersect_ray(self).is_some() {
                             return true;
                         }
                     }
