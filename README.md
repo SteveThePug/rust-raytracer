@@ -2,7 +2,7 @@
 
 # Introduction
 
-![image](img/img1.png)
+![image](img/img2.png)
 
 This is a project I undertook at the University of Waterloo, where I first started using rust. Because of my inexperience, the code isn't as organised as it would be if I made it today and represents my first steps in computer graphics and the rust language.
 
