@@ -11,7 +11,7 @@ use imgui::*;
 use nalgebra::{Point3, Vector3};
 use pixels::{wgpu, PixelsContext};
 use rhai::Engine;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 //BUFFER CONSTANTS
 const BUFFER_PROPORTION_MIN: f32 = 0.1;
@@ -38,22 +38,16 @@ const MIN_DIFFUSE_COEFFICIENT: f32 = 0.0;
 const MAX_DIFFUSE_COEFFICIENT: f32 = 1.0;
 
 //MATERIAL CONSTANTS
-const MIN_D: f32 = 0.0;
-const MIN_S: f32 = 0.0;
 const MIN_SHINE: f32 = 0.0;
-const MAX_D: f32 = 1.0;
-const MAX_S: f32 = 1.0;
 const MAX_SHINE: f32 = 50.0;
 
 //TRANSFORMATION CONSTANTS
-const MIN_COLOUR: f32 = 0.0;
 const MIN_FALLOFF: f32 = 0.0;
 const MIN_SCALE: f64 = 0.0;
 //const MIN_POSITION: f64 = -10.0;
 const MIN_ROTATION: f64 = -180.0;
 const MIN_TRANSLATE: f64 = -10.0;
 //--
-const MAX_COLOUR: f32 = 1.0;
 const MAX_FALLOFF: f32 = 1.0;
 const MAX_SCALE: f64 = 3.0;
 //const MAX_POSITION: f64 = 10.0;
@@ -80,6 +74,9 @@ pub struct Gui {
     last_cursor: Option<imgui::MouseCursor>,
 
     pub event: Option<GuiEvent>,
+
+    render_start: Option<Instant>,
+    render_elapsed: Option<Duration>,
 
     script_filename: String,
     script: String,
@@ -141,6 +138,9 @@ impl Gui {
             last_cursor: None,
             event: None,
 
+            render_start: None,
+            render_elapsed: None,
+
             script_filename: String::from(INIT_FILE),
             script: String::new(),
             engine: init_engine(),
@@ -169,6 +169,17 @@ impl Gui {
         }
         // ------------ TESTING CODE (LOAD SCENE ON START) -----------------
         gui
+    }
+
+    pub fn start_render_timer(&mut self) {
+        self.render_start = Some(Instant::now());
+        self.render_elapsed = None;
+    }
+
+    pub fn stop_render_timer(&mut self) {
+        if let Some(start) = self.render_start.take() {
+            self.render_elapsed = Some(start.elapsed());
+        }
     }
 
     /// Prepare Dear ImGui.
@@ -216,25 +227,42 @@ impl Gui {
                 &mut self.raytracing_option.threads,
             );
             // Numbers of rays to render per pass
-            ui.slider(
-                "Rays Per Pass",
-                RAYS_MIN,
-                RAYS_MAX,
-                &mut self.raytracing_option.pixels_per_thread,
-            );
+            Drag::new("Rays Per Pass")
+                .range(RAYS_MIN, RAYS_MAX)
+                .speed(50.0)
+                .build(ui, &mut self.raytracing_option.pixels_per_thread);
             // Proportion of the window the buffer occupies
-            ui.slider(
-                "% Buffer: ",
-                BUFFER_PROPORTION_MIN,
-                BUFFER_PROPORTION_MAX,
-                &mut self.raytracing_option.buffer_proportion,
-            );
+            Drag::new("% Buffer: ")
+                .range(BUFFER_PROPORTION_MIN, BUFFER_PROPORTION_MAX)
+                .speed(0.005)
+                .display_format("%.2f")
+                .build(ui, &mut self.raytracing_option.buffer_proportion);
             //Clear colour for scene
-            ui.slider_config("Clear Colour", 0, 255)
-                .build_array(&mut self.raytracing_option.clear_color);
+            let mut clear_f32 = [
+                self.raytracing_option.clear_color[0] as f32 / 255.0,
+                self.raytracing_option.clear_color[1] as f32 / 255.0,
+                self.raytracing_option.clear_color[2] as f32 / 255.0,
+                self.raytracing_option.clear_color[3] as f32 / 255.0,
+            ];
+            if ui.color_edit4_config("Clear Colour", &mut clear_f32).alpha_bar(true).build() {
+                self.raytracing_option.clear_color = [
+                    (clear_f32[0] * 255.0) as u8, (clear_f32[1] * 255.0) as u8,
+                    (clear_f32[2] * 255.0) as u8, (clear_f32[3] * 255.0) as u8,
+                ];
+            }
             //Clear colour if no intersect
-            ui.slider_config("Pixel Clear Colour", 0, 255)
-                .build_array(&mut self.raytracing_option.pixel_clear);
+            let mut pixel_clear_f32 = [
+                self.raytracing_option.pixel_clear[0] as f32 / 255.0,
+                self.raytracing_option.pixel_clear[1] as f32 / 255.0,
+                self.raytracing_option.pixel_clear[2] as f32 / 255.0,
+                self.raytracing_option.pixel_clear[3] as f32 / 255.0,
+            ];
+            if ui.color_edit4_config("Pixel Clear Colour", &mut pixel_clear_f32).alpha_bar(true).build() {
+                self.raytracing_option.pixel_clear = [
+                    (pixel_clear_f32[0] * 255.0) as u8, (pixel_clear_f32[1] * 255.0) as u8,
+                    (pixel_clear_f32[2] * 255.0) as u8, (pixel_clear_f32[3] * 255.0) as u8,
+                ];
+            }
             //Ray depth slider
             ui.slider(
                 "Ray Depth",
@@ -250,12 +278,11 @@ impl Gui {
                 &mut self.raytracing_option.ray_samples,
             );
             //Ray randomness
-            ui.slider(
-                "Ray Randomness",
-                MIN_RANDOM,
-                MAX_RANDOM,
-                &mut self.raytracing_option.ray_randomness,
-            );
+            Drag::new("Ray Randomness")
+                .range(MIN_RANDOM, MAX_RANDOM)
+                .speed(5.0)
+                .display_format("%.1f")
+                .build(ui, &mut self.raytracing_option.ray_randomness);
             //Number of diffuse rays
             ui.slider(
                 "Diffuse Rays",
@@ -264,12 +291,11 @@ impl Gui {
                 &mut self.raytracing_option.diffuse_rays,
             );
             //Diffuse Coefficient
-            ui.slider(
-                "Diffuse Coefficient",
-                MIN_DIFFUSE_COEFFICIENT,
-                MAX_DIFFUSE_COEFFICIENT,
-                &mut self.raytracing_option.diffuse_coefficient,
-            );
+            Drag::new("Diffuse Coefficient")
+                .range(MIN_DIFFUSE_COEFFICIENT, MAX_DIFFUSE_COEFFICIENT)
+                .speed(0.005)
+                .display_format("%.3f")
+                .build(ui, &mut self.raytracing_option.diffuse_coefficient);
             // Fov of the buffer
             ui.slider(
                 "fov",
@@ -283,6 +309,15 @@ impl Gui {
             ui.checkbox("Enable Reflections", &mut self.raytracing_option.reflect);
             ui.checkbox("Enable Specular", &mut self.raytracing_option.specular);
             ui.checkbox("Enable Diffuse", &mut self.raytracing_option.diffuse);
+            // Render timer display
+            ui.separator();
+            if let Some(start) = &self.render_start {
+                let elapsed = start.elapsed().as_secs_f64();
+                ui.text(format!("Rendering: {:.2}s", elapsed));
+            } else if let Some(elapsed) = &self.render_elapsed {
+                ui.text(format!("Render time: {:.2}s", elapsed.as_secs_f64()));
+            }
+            ui.separator();
             // Apply stored changes
             if ui.button("Apply") {
                 self.event = Some(GuiEvent::RaytracerOption(self.raytracing_option.clone()));
@@ -292,12 +327,21 @@ impl Gui {
         if CollapsingHeader::new("Camera").build(ui) {
             // Eye, target and up vector inputs
             ui.text("Camera options:");
-            ui.slider_config("Eye", MIN_TRANSLATE, MAX_TRANSLATE)
-                .build_array(self.camera.eye.coords.as_mut_slice());
-            ui.slider_config("Target", MIN_TRANSLATE, MAX_TRANSLATE)
-                .build_array(self.camera.target.coords.as_mut_slice());
-            ui.slider_config("Up", 0.0, 1.0)
-                .build_array(self.camera.up.as_mut_slice());
+            Drag::new("Eye")
+                .range(MIN_TRANSLATE, MAX_TRANSLATE)
+                .speed(0.05)
+                .display_format("%.2f")
+                .build_array(ui, self.camera.eye.coords.as_mut_slice());
+            Drag::new("Target")
+                .range(MIN_TRANSLATE, MAX_TRANSLATE)
+                .speed(0.05)
+                .display_format("%.2f")
+                .build_array(ui, self.camera.target.coords.as_mut_slice());
+            Drag::new("Up")
+                .range(0.0, 1.0)
+                .speed(0.005)
+                .display_format("%.3f")
+                .build_array(ui, self.camera.up.as_mut_slice());
             if ui.button("Apply Camera") {
                 println!("Camera changed");
                 self.event = Some(GuiEvent::CameraUpdate(self.camera.clone()));
@@ -361,12 +405,21 @@ impl Gui {
                     ui.checkbox(format!("##active{label}"), &mut node.active);
                     ui.same_line();
                     if let Some(_t) = ui.tree_node(label) {
-                        ui.slider_config("Translation", MIN_TRANSLATE, MAX_TRANSLATE)
-                            .build_array(&mut node.translation);
-                        ui.slider_config("Rotation", MIN_ROTATION, MAX_ROTATION)
-                            .build_array(&mut node.rotation);
-                        ui.slider_config("Scale", MIN_SCALE, MAX_SCALE)
-                            .build_array(&mut node.scale);
+                        Drag::new("Translation")
+                            .range(MIN_TRANSLATE, MAX_TRANSLATE)
+                            .speed(0.05)
+                            .display_format("%.2f")
+                            .build_array(ui, &mut node.translation);
+                        Drag::new("Rotation")
+                            .range(MIN_ROTATION, MAX_ROTATION)
+                            .speed(1.0)
+                            .display_format("%.1f")
+                            .build_array(ui, &mut node.rotation);
+                        Drag::new("Scale")
+                            .range(MIN_SCALE, MAX_SCALE)
+                            .speed(0.01)
+                            .display_format("%.3f")
+                            .build_array(ui, &mut node.scale);
                     }
                 }
             }
@@ -374,11 +427,19 @@ impl Gui {
             if let Some(_t) = ui.tree_node("Materials") {
                 for (label, material) in &mut self.scene.materials {
                     if let Some(_t) = ui.tree_node(label) {
-                        ui.slider_config("ks", MIN_D, MAX_D)
-                            .build_array(material.ks.as_mut_slice());
-                        ui.slider_config("kd", MIN_S, MAX_S)
-                            .build_array(material.kd.as_mut_slice());
-                        ui.slider("shine", MIN_SHINE, MAX_SHINE, &mut material.shininess);
+                        let mut ks_arr: [f32; 3] = material.ks.into();
+                        if ui.color_edit3("ks", &mut ks_arr) {
+                            material.ks = Vector3::from(ks_arr);
+                        }
+                        let mut kd_arr: [f32; 3] = material.kd.into();
+                        if ui.color_edit3("kd", &mut kd_arr) {
+                            material.kd = Vector3::from(kd_arr);
+                        }
+                        Drag::new("shine")
+                            .range(MIN_SHINE, MAX_SHINE)
+                            .speed(0.5)
+                            .display_format("%.1f")
+                            .build(ui, &mut material.shininess);
                     }
                 }
             }
@@ -388,12 +449,20 @@ impl Gui {
                     ui.checkbox(format!("##activelight{label}"), &mut light.active);
                     ui.same_line();
                     if let Some(_t) = ui.tree_node(label) {
-                        ui.slider_config("Colour", MIN_COLOUR, MAX_COLOUR)
-                            .build_array(light.colour.as_mut_slice());
-                        ui.slider_config("Position", MIN_TRANSLATE, MAX_TRANSLATE)
-                            .build_array(light.position.coords.as_mut_slice());
-                        ui.slider_config("Falloff", MIN_FALLOFF, MAX_FALLOFF)
-                            .build_array(light.falloff.as_mut_slice());
+                        let mut colour_arr: [f32; 3] = light.colour.into();
+                        if ui.color_edit3("Colour", &mut colour_arr) {
+                            light.colour = Vector3::from(colour_arr);
+                        }
+                        Drag::new("Position")
+                            .range(MIN_TRANSLATE, MAX_TRANSLATE)
+                            .speed(0.05)
+                            .display_format("%.2f")
+                            .build_array(ui, light.position.coords.as_mut_slice());
+                        Drag::new("Falloff")
+                            .range(MIN_FALLOFF, MAX_FALLOFF)
+                            .speed(0.005)
+                            .display_format("%.3f")
+                            .build_array(ui, light.falloff.as_mut_slice());
                     }
                 }
             }
@@ -428,6 +497,11 @@ impl Gui {
             &context.device,
             &mut rpass,
         )
+    }
+
+    /// Update the GUI's camera to reflect external changes (e.g. from keyboard/mouse movement)
+    pub fn update_camera(&mut self, camera: &Camera) {
+        self.camera = camera.clone();
     }
 
     /// Handle any outstanding events.

@@ -168,6 +168,28 @@ impl Ray {
         // Compute the ambient light component and set it as base colour
         let mut colour = Vector3::zeros();
 
+        // Reflection is view-dependent, not light-dependent — compute once
+        let mut reflect = Vector3::zeros();
+        if options.reflect {
+            let reflect_dir = incidence - 2.0 * incidence.dot(&normal) * normal;
+            let reflect_ray = Ray::new(*point, reflect_dir);
+            if let Some(col) = reflect_ray.shade_ray(scene, depth + 1, options, bvh) {
+                reflect += col.component_mul(&material.kr)
+            }
+        }
+
+        // Indirect diffuse (global illumination samples) — compute once
+        let mut indirect = Vector3::zeros();
+        if options.diffuse {
+            for _ in 0..options.diffuse_rays {
+                let diffuse_dir = random_unit_vec();
+                let diffuse_ray = Ray::new(point.clone(), diffuse_dir + normal);
+                if let Some(col) = diffuse_ray.shade_ray(scene, depth + 1, options, bvh) {
+                    indirect += col * options.diffuse_coefficient;
+                }
+            }
+        }
+
         for (_, light) in &scene.lights {
             if !light.active {
                 continue;
@@ -192,27 +214,10 @@ impl Ray {
 
             let n_dot_l = normal.dot(&to_light).max(0.0) as f32;
 
-            //Reflected component
-            let mut reflect = Vector3::zeros();
-            if options.reflect {
-                let reflect_dir = incidence - 2.0 * incidence.dot(&normal) * normal;
-                let reflect_ray = Ray::new(*point, reflect_dir);
-                if let Some(col) = reflect_ray.shade_ray(scene, depth + 1, options, bvh) {
-                    reflect += col.component_mul(&material.kr)
-                }
-            }
-
-            //Diffuse component (Lambertian)
+            //Direct diffuse component (Lambertian)
             let mut diffuse = Vector3::zeros();
             if options.diffuse {
                 diffuse += material.kd * n_dot_l;
-                for _ in 0..options.diffuse_rays {
-                    let diffuse_dir = random_unit_vec();
-                    let diffuse_ray = Ray::new(point.clone(), diffuse_dir + normal);
-                    if let Some(col) = diffuse_ray.shade_ray(scene, depth + 1, options, bvh) {
-                        diffuse += col * options.diffuse_coefficient;
-                    }
-                }
             }
 
             //Specular component
@@ -234,9 +239,12 @@ impl Ray {
                         + light.falloff[2] * light_distance * light_distance);
             }
 
-            let intensity = light.colour.component_mul(&(diffuse + reflect + specular)) * falloff;
+            let intensity = light.colour.component_mul(&(diffuse + specular)) * falloff;
             colour += &intensity;
         }
+
+        // Add light-independent terms
+        colour += reflect + indirect;
 
         colour
     }
@@ -246,18 +254,8 @@ impl Ray {
         match bvh {
             Some(bvh) => {
                 //We have a bvh so use bvh traversal
-                for (_, node) in &scene.nodes {
-                    if !node.active {
-                        continue;
-                    }
-                    match bvh.traverse(self, 0) {
-                        Some((_, intersect)) => {
-                            if intersect.distance < light_distance {
-                                return true;
-                            }
-                        }
-                        None => continue,
-                    }
+                if let Some((_, intersect)) = bvh.traverse(self, 0) {
+                    return intersect.distance < light_distance;
                 }
                 return false;
             }

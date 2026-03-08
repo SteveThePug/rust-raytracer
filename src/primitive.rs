@@ -47,14 +47,12 @@ impl Primitive for Sphere {
             Roots::No(_) => return None,
             Roots::One([x1]) => x1,
             Roots::Two([x1, x2]) => {
-                if x1 <= 0.0 && x2 <= 0.0 {
-                    return None;
+                if x1 > EPSILON {
+                    x1
+                } else if x2 > EPSILON {
+                    x2
                 } else {
-                    if x1.abs() < x2.abs() {
-                        x1
-                    } else {
-                        x2
-                    }
+                    return None;
                 }
             }
             _ => return None,
@@ -124,7 +122,7 @@ impl Primitive for Circle {
         let n_dot_b = ray.b.dot(&self.normal);
         let t = (self.constant - n_dot_a) / n_dot_b;
 
-        if t > INFINITY {
+        if t < EPSILON || t > INFINITY {
             return None;
         };
 
@@ -197,14 +195,12 @@ impl Primitive for Cylinder {
             Roots::No(_) => return None,
             Roots::One([x1]) => Some(x1),
             Roots::Two([x1, x2]) => {
-                if x1 <= 0.0 && x2 <= 0.0 {
-                    return None;
+                if x1 > EPSILON {
+                    Some(x1)
+                } else if x2 > EPSILON {
+                    Some(x2)
                 } else {
-                    if x1.abs() < x2.abs() {
-                        Some(x1)
-                    } else {
-                        Some(x2)
-                    }
+                    return None;
                 }
             }
             _ => return None,
@@ -325,14 +321,12 @@ impl Primitive for Cone {
             Roots::No(_) => None,
             Roots::One([x1]) => Some(x1),
             Roots::Two([x1, x2]) => {
-                if x1 <= 0.0 && x2 <= 0.0 {
-                    None
+                if x1 > EPSILON {
+                    Some(x1)
+                } else if x2 > EPSILON {
+                    Some(x2)
                 } else {
-                    if x1.abs() < x2.abs() {
-                        Some(x1)
-                    } else {
-                        Some(x2)
-                    }
+                    None
                 }
             }
             _ => None,
@@ -359,7 +353,15 @@ impl Primitive for Cone {
             (None, None) => None,
             (Some(cone_intersect), None) => Some(cone_intersect),
             (None, Some(circle_intersect)) => Some(circle_intersect),
-            (Some(cone_intersect), Some(_)) => Some(cone_intersect),
+            (Some(cone_intersect), Some(circle_intersect)) => {
+                let cone_distance = distance(&ray.a, &cone_intersect.point);
+                let circle_distance = distance(&ray.a, &circle_intersect.point);
+                if cone_distance < circle_distance {
+                    Some(cone_intersect)
+                } else {
+                    Some(circle_intersect)
+                }
+            }
         }
     }
 
@@ -395,7 +397,7 @@ impl Primitive for RectangleXY {
         let az = ray.a.z;
         let bz = ray.b.z;
         let t = (z - az) / bz;
-        if t > INFINITY {
+        if t < EPSILON || t > INFINITY {
             return None;
         }
         let intersect = ray.at_t(t);
@@ -470,21 +472,28 @@ impl Primitive for Cube {
                 return None; // Intersection is outside the box
             }
 
-            //Get normal of intersection point
-            //t1 is bln t2 is trf
-            let normal = if tmin == t1.x {
-                Vector3::new(-1.0, 0.0, 0.0)
-            } else if tmin == t1.y {
-                Vector3::new(0.0, -1.0, 0.0)
-            } else if tmin == t1.z {
-                Vector3::new(0.0, 0.0, -1.0)
-            } else if tmin == t2.x {
-                Vector3::new(1.0, 0.0, 0.0)
-            } else if tmin == t2.y {
-                Vector3::new(0.0, 1.0, 0.0)
-            } else {
-                Vector3::new(0.0, 0.0, 1.0)
-            };
+            // Determine which face was hit by finding the t-value closest to tmin
+            let diffs = [
+                (t1.x - tmin).abs(),
+                (t1.y - tmin).abs(),
+                (t1.z - tmin).abs(),
+                (t2.x - tmin).abs(),
+                (t2.y - tmin).abs(),
+                (t2.z - tmin).abs(),
+            ];
+            let normals = [
+                Vector3::new(-1.0, 0.0, 0.0),
+                Vector3::new(0.0, -1.0, 0.0),
+                Vector3::new(0.0, 0.0, -1.0),
+                Vector3::new(1.0, 0.0, 0.0),
+                Vector3::new(0.0, 1.0, 0.0),
+                Vector3::new(0.0, 0.0, 1.0),
+            ];
+            let min_idx = diffs.iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+                .unwrap().0;
+            let normal = normals[min_idx];
 
             Some(Intersection {
                 point: intersect,
@@ -645,9 +654,9 @@ impl Mesh {
                                 let u = vertices[v1 - 1];
                                 let v = vertices[v2 - 1];
                                 let w = vertices[v3 - 1];
-                                let uv = u - v;
-                                let uw = w - v;
-                                let normal = uv.cross(&uw).normalize();
+                                let uv = v - u;
+                                let uw = w - u;
+                                let normal = uw.cross(&uv).normalize();
                                 triangles.push(Triangle { u, v, w, normal });
                             }
                         }
@@ -805,9 +814,9 @@ impl Primitive for Torus {
     }
 
     fn get_aabb(&self) -> AABB {
-        //TODO!
-        let trf = Point3::new(1.0, 1.0, 1.0);
-        let bln = Point3::new(-1.0, -1.0, -1.0);
+        let extent = self.inner_rad + self.outer_rad;
+        let bln = Point3::new(-extent, -self.outer_rad, -extent);
+        let trf = Point3::new(extent, self.outer_rad, extent);
         AABB::new(bln, trf)
     }
 }
@@ -846,19 +855,19 @@ impl Gnonom {
 
 impl Primitive for Gnonom {
     fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
-        match self.x_cube.intersect_ray(ray) {
-            Some(intersect) => return Some(intersect),
-            None => (),
-        };
-        match self.y_cube.intersect_ray(ray) {
-            Some(intersect) => return Some(intersect),
-            None => (),
-        };
-        match self.z_cube.intersect_ray(ray) {
-            Some(intersect) => return Some(intersect),
-            None => (),
-        };
-        None
+        let mut closest: Option<Intersection> = None;
+        let mut closest_dist = f64::MAX;
+
+        for cube in [&self.x_cube, &self.y_cube, &self.z_cube] {
+            if let Some(intersect) = cube.intersect_ray(ray) {
+                let dist = distance(&ray.a, &intersect.point);
+                if dist < closest_dist {
+                    closest_dist = dist;
+                    closest = Some(intersect);
+                }
+            }
+        }
+        closest
     }
 
     fn get_aabb(&self) -> AABB {

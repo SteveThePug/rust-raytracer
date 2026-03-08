@@ -5,6 +5,7 @@ use crate::camera::Camera;
 use crate::ray::Ray;
 use crate::{gui::Gui, scene::Scene};
 use crate::{gui::GuiEvent, log_error};
+use std::collections::HashSet;
 use std::path::Path;
 use std::thread;
 
@@ -13,12 +14,15 @@ use rand::seq::SliceRandom;
 use rand::{random, thread_rng};
 
 use std::error::Error;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 
 use anyhow::Result;
 use pixels::{Pixels, SurfaceTexture};
 use winit::dpi::{LogicalSize, PhysicalSize};
-use winit::event::{Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent};
+use winit::event::{
+    ElementState, Event, KeyboardInput, MouseButton, VirtualKeyCode, WindowEvent,
+};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
@@ -72,6 +76,9 @@ impl RaytracingOption {
     }
 }
 
+const CAMERA_MOVE_SPEED: f64 = 0.15;
+const CAMERA_ORBIT_SPEED: f64 = 0.005;
+
 pub struct State {
     scene: Arc<Scene>,
     bvh: Arc<Option<BVH>>,
@@ -85,8 +92,17 @@ pub struct State {
     gui: Gui,
 
     rays: Arc<Vec<Ray>>,
-    ray_queue: Vec<usize>,
+    ray_queue: Arc<Mutex<Vec<usize>>>,
     raytracing_options: Arc<RaytracingOption>,
+
+    result_rx: mpsc::Receiver<Vec<(usize, [u8; 4])>>,
+    render_active: Arc<AtomicBool>,
+    rendering: bool,
+
+    keys_pressed: HashSet<VirtualKeyCode>,
+    right_mouse_down: bool,
+    last_mouse_pos: Option<(f64, f64)>,
+    camera_dirty: bool,
 }
 
 impl State {
@@ -96,6 +112,7 @@ impl State {
         let pixels = pixels;
         let camera = Camera::unit();
         let rays = Arc::new(Vec::new());
+        let (_tx, rx) = mpsc::channel();
 
         Self {
             scene,
@@ -107,8 +124,15 @@ impl State {
             pixels,
             gui,
             rays,
-            ray_queue: Vec::new(),
+            ray_queue: Arc::new(Mutex::new(Vec::new())),
             raytracing_options: Arc::new(RaytracingOption::default()),
+            result_rx: rx,
+            render_active: Arc::new(AtomicBool::new(false)),
+            rendering: false,
+            keys_pressed: HashSet::new(),
+            right_mouse_down: false,
+            last_mouse_pos: None,
+            camera_dirty: false,
         }
     }
 
@@ -192,98 +216,109 @@ impl State {
     }
 
     fn keyboard_input(&mut self, key: &KeyboardInput) {
-        if let Some(VirtualKeyCode::A) = key.virtual_keycode {
-            // Handle 'A' key event here
-        }
-    }
-
-    fn mouse_input(&mut self, _button: &MouseButton) {
-        // Handle mouse input here
-    }
-
-    fn draw(&mut self) -> Result<(), Box<dyn Error>> {
-        //Draw ray_num in a block
-        let randomness = self.raytracing_options.ray_randomness;
-        let samples = self.raytracing_options.ray_samples;
-        let samples_f32 = samples as f32;
-
-        let num_threads = self.raytracing_options.threads;
-        let pixels_per_thread = self.raytracing_options.pixels_per_thread;
-
-        let mut handles = vec![];
-
-        for _ in 0..num_threads {
-            //Get necessary variables to render
-            let rays = self.rays.clone();
-            let scene = self.scene.clone();
-            let options = self.raytracing_options.clone();
-            let bvh = self.bvh.clone();
-
-            //Get the workload for a thread
-            let mut load = vec![];
-            for _ in 0..pixels_per_thread {
-                match self.ray_queue.pop() {
-                    Some(index) => load.push(index),
-                    None => break,
+        if let Some(keycode) = key.virtual_keycode {
+            match key.state {
+                ElementState::Pressed => {
+                    self.keys_pressed.insert(keycode);
+                }
+                ElementState::Released => {
+                    self.keys_pressed.remove(&keycode);
                 }
             }
-            //The finished queue of the thread
-            let mut finished = vec![];
+        }
+    }
 
-            //Create a new thread for these pixels
-            let handle = thread::spawn({
-                move || {
-                    for index in &load {
-                        //Shade colour for selected index
-                        let mut colour: Vector3<f32> = Vector3::zeros();
-                        let ray = &rays[*index];
-                        for _ in 0..samples {
-                            //Generate a ray in a random direction
-                            let point = ray.a;
-                            let dir = ray.b;
-                            let rx = (random::<f64>() - 0.5) / randomness;
-                            let ry = (random::<f64>() - 0.5) / randomness;
-                            let rz = (random::<f64>() - 0.5) / randomness;
-                            let nx = dir.x + rx;
-                            let ny = dir.y + ry;
-                            let nz = dir.z + rz;
+    fn mouse_input(&mut self, button: &MouseButton, state: &ElementState) {
+        if *button == MouseButton::Right {
+            self.right_mouse_down = *state == ElementState::Pressed;
+            if !self.right_mouse_down {
+                self.last_mouse_pos = None;
+            }
+        }
+    }
 
-                            let rand_ray = Ray::new(point, Vector3::new(nx, ny, nz));
+    fn cursor_moved(&mut self, x: f64, y: f64) {
+        if self.right_mouse_down {
+            if let Some((last_x, last_y)) = self.last_mouse_pos {
+                let dx = x - last_x;
+                let dy = y - last_y;
+                self.camera.orbit(
+                    -dx * CAMERA_ORBIT_SPEED,
+                    -dy * CAMERA_ORBIT_SPEED,
+                );
+                self.camera_dirty = true;
+            }
+            self.last_mouse_pos = Some((x, y));
+        }
+    }
 
-                            if let Some(ray_colour) = rand_ray.shade_ray(&scene, 0, &options, &bvh)
-                            {
-                                colour += ray_colour;
-                            }
-                        }
-                        colour = (colour / samples_f32) * 255.0;
-                        let rgba = [colour.x as u8, colour.y as u8, colour.z as u8, 0xff];
-                        finished.push(rgba);
+    fn process_camera_movement(&mut self) {
+        let speed = CAMERA_MOVE_SPEED;
+
+        if self.keys_pressed.contains(&VirtualKeyCode::W) {
+            self.camera.move_forward(speed);
+            self.camera_dirty = true;
+        }
+        if self.keys_pressed.contains(&VirtualKeyCode::S) {
+            self.camera.move_forward(-speed);
+            self.camera_dirty = true;
+        }
+        if self.keys_pressed.contains(&VirtualKeyCode::A) {
+            self.camera.move_right(-speed);
+            self.camera_dirty = true;
+        }
+        if self.keys_pressed.contains(&VirtualKeyCode::D) {
+            self.camera.move_right(speed);
+            self.camera_dirty = true;
+        }
+        if self.keys_pressed.contains(&VirtualKeyCode::Q) {
+            self.camera.move_up(-speed);
+            self.camera_dirty = true;
+        }
+        if self.keys_pressed.contains(&VirtualKeyCode::E) {
+            self.camera.move_up(speed);
+            self.camera_dirty = true;
+        }
+
+        if self.camera_dirty {
+            self.camera_dirty = false;
+            self.rays = Arc::new(Ray::cast_rays(
+                &self.camera.eye,
+                &self.camera.target,
+                &self.camera.up,
+                self.raytracing_options.buffer_fov,
+                self.buffer_width,
+                self.buffer_height,
+            ));
+            self.gui.update_camera(&self.camera);
+            let _ = self.clear_buffer();
+            self.reset_queue();
+        }
+    }
+
+    fn draw(&mut self) {
+        if !self.rendering {
+            return;
+        }
+
+        // Drain completed results from background workers
+        loop {
+            match self.result_rx.try_recv() {
+                Ok(results) => {
+                    let frame = self.pixels.frame_mut();
+                    for (index, rgba) in results {
+                        frame[index * 4..(index + 1) * 4].copy_from_slice(&rgba);
                     }
-                    return (load, finished);
                 }
-            });
-            handles.push(handle);
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    // All worker threads have finished
+                    self.rendering = false;
+                    self.gui.stop_render_timer();
+                    break;
+                }
+            }
         }
-
-        let mut all_results = vec![];
-
-        for handle in handles.drain(..) {
-            let (load, finished) = handle
-                .join()
-                .map_err(|e| format!("Thread panicked: {:?}", e))?;
-            let thread_results: Vec<_> = load.into_iter().zip(finished.into_iter()).collect();
-            all_results.extend(thread_results);
-        }
-
-        //Now we have two vectors will all the indicies and rgba values, we can upload them to the bufer
-
-        let frame = self.pixels.frame_mut();
-        for result in all_results {
-            let index = result.0;
-            let rgba = result.1;
-            frame[index * 4..(index + 1) * 4].copy_from_slice(&rgba);
-        }
-        Ok(())
     }
 
     fn clear_buffer(&mut self) -> Result<(), Box<dyn Error>> {
@@ -295,26 +330,113 @@ impl State {
     }
 
     fn reset_queue(&mut self) {
+        // Signal any existing workers to stop
+        self.render_active.store(false, Ordering::Relaxed);
+
         match self.raytracing_options.bvh_active {
             true => self.bvh = Arc::new(Some(BVH::build(&self.scene.nodes))),
             false => self.bvh = Arc::new(None),
         }
+
+        // Create new shuffled queue
         let size = self.buffer_height as usize * self.buffer_width as usize;
         let mut ray_queue: Vec<usize> = (0..size).collect();
         ray_queue.shuffle(&mut thread_rng());
-        self.ray_queue = ray_queue;
+        self.ray_queue = Arc::new(Mutex::new(ray_queue));
+
+        // Create new channel and active flag
+        let (tx, rx) = mpsc::channel();
+        self.result_rx = rx;
+        let render_active = Arc::new(AtomicBool::new(true));
+        self.render_active = render_active.clone();
+        self.rendering = true;
+
+        // Spawn persistent worker threads
+        let num_threads = self.raytracing_options.threads;
+        let pixels_per_thread = self.raytracing_options.pixels_per_thread;
+
+        for _ in 0..num_threads {
+            let rays = self.rays.clone();
+            let scene = self.scene.clone();
+            let options = self.raytracing_options.clone();
+            let bvh = self.bvh.clone();
+            let queue = self.ray_queue.clone();
+            let tx = tx.clone();
+            let active = render_active.clone();
+
+            thread::spawn(move || {
+                let randomness = options.ray_randomness;
+                let samples = options.ray_samples;
+                let samples_f32 = samples as f32;
+
+                loop {
+                    if !active.load(Ordering::Relaxed) {
+                        break;
+                    }
+
+                    // Pop a batch from the shared queue
+                    let load: Vec<usize> = {
+                        let mut q = queue.lock().unwrap();
+                        let mut batch = Vec::with_capacity(pixels_per_thread as usize);
+                        for _ in 0..pixels_per_thread {
+                            match q.pop() {
+                                Some(index) => batch.push(index),
+                                None => break,
+                            }
+                        }
+                        batch
+                    };
+
+                    if load.is_empty() {
+                        break;
+                    }
+
+                    // Process the batch
+                    let mut results = Vec::with_capacity(load.len());
+                    for index in &load {
+                        let mut colour: Vector3<f32> = Vector3::zeros();
+                        let ray = &rays[*index];
+                        for _ in 0..samples {
+                            let point = ray.a;
+                            let dir = ray.b;
+                            let rx = (random::<f64>() - 0.5) / randomness;
+                            let ry = (random::<f64>() - 0.5) / randomness;
+                            let rz = (random::<f64>() - 0.5) / randomness;
+                            let nx = dir.x + rx;
+                            let ny = dir.y + ry;
+                            let nz = dir.z + rz;
+
+                            let rand_ray = Ray::new(point, Vector3::new(nx, ny, nz));
+
+                            if let Some(ray_colour) =
+                                rand_ray.shade_ray(&scene, 0, &options, &bvh)
+                            {
+                                colour += ray_colour;
+                            }
+                        }
+                        colour = (colour / samples_f32) * 255.0;
+                        let rgba = [colour.x as u8, colour.y as u8, colour.z as u8, 0xff];
+                        results.push((*index, rgba));
+                    }
+
+                    // Send results back to main thread
+                    if tx.send(results).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        // Drop our copy of tx so the channel disconnects when all workers finish
+        drop(tx);
+
+        self.gui.start_render_timer();
     }
 
     fn render(&mut self) -> Result<(), Box<dyn Error>> {
         // Update state
         self.update()?;
-        // Draw rays if we have remaining rays in queue
-        match self.draw() {
-            Err(e) => {
-                println!("ERROR: {}", e);
-            }
-            _ => {}
-        }
+        // Collect completed rays from background workers
+        self.draw();
         // Render Gui
         self.gui
             .prepare(&self.window)
@@ -355,11 +477,17 @@ pub fn run() -> Result<(), Box<dyn Error>> {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Resized(size) => state.resize(&size).expect("Window Resize Error"),
                 WindowEvent::KeyboardInput { input, .. } => state.keyboard_input(&input),
-                WindowEvent::MouseInput { button, .. } => state.mouse_input(&button),
+                WindowEvent::MouseInput { button, state: elem_state, .. } => {
+                    state.mouse_input(&button, &elem_state)
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    state.cursor_moved(position.x, position.y)
+                }
                 _ => {}
             },
 
             Event::RedrawRequested(_) => {
+                state.process_camera_movement();
                 if let Err(_e) = state.render() {
                     *control_flow = ControlFlow::Exit;
                 }

@@ -99,17 +99,19 @@ impl Node {
         // Compute the inverse model matrix by inverting the model matrix
         self.inv_model = self.model.try_inverse().unwrap();
         self.inv_transpose_model = self.inv_model.transpose().remove_row(3).remove_column(3);
+        self.aabb = self.primitive.get_aabb();
         self.aabb.transform_mut(&self.model);
     }
     // Intersection of a ray, will convert to model coords and check
     pub fn intersect_ray(&self, ray: &Ray) -> Option<Intersection> {
+        let world_origin = ray.a; // Save world-space origin before transform
         let ray = ray.transform(&self.inv_model); //Transform from world coordinates
         if let Some(mut intersect) = self.primitive.intersect_ray(&ray) {
             if intersect.distance < EPSILON {
                 return None;
             }
             intersect.transform_mut(&self.model, &self.inv_transpose_model); //Transform to world coords
-            intersect.distance = distance(&intersect.point, &ray.a);
+            intersect.distance = distance(&intersect.point, &world_origin);
             return Some(intersect);
         }
         return None;

@@ -21,8 +21,8 @@ pub struct AABB {
 impl AABB {
     // New box with respective coordinates
     pub fn new(bln: Point3<f64>, trf: Point3<f64>) -> AABB {
-        let bln = bln + Vector3::new(EPSILON, EPSILON, EPSILON);
-        let trf = trf - Vector3::new(EPSILON, EPSILON, EPSILON);
+        let bln = bln - Vector3::new(EPSILON, EPSILON, EPSILON);
+        let trf = trf + Vector3::new(EPSILON, EPSILON, EPSILON);
         let centroid = bln + (trf - bln) / 2.0;
         AABB { bln, trf, centroid }
     }
@@ -50,50 +50,22 @@ impl AABB {
         let t1 = (bln - ray.a).component_div(&ray.b);
         let t2 = (trf - ray.a).component_div(&ray.b);
 
-        let tmin = t1.inf(&t2).min();
-        let tmax = t1.sup(&t2).max();
+        let tmin = t1.inf(&t2).max();
+        let tmax = t1.sup(&t2).min();
 
-        if tmax >= tmin {
-            let intersect = ray.at_t(tmin);
-
-            // Check if the intersection is inside the box
-            if intersect.x > bln.x
-                || intersect.x < trf.x
-                || intersect.y > bln.y
-                || intersect.y < trf.y
-                || intersect.z > bln.z
-                || intersect.z < trf.z
-            {
-                return true; // Intersection is outside the box
-            }
-        }
-        false
+        tmax >= tmin && tmax > 0.0
     }
-    // Intersect way with some epsilon term
+    // Intersect ray with some epsilon tolerance
     pub fn intersect_ray_aprox(&self, ray: &Ray) -> bool {
         let bln = &self.bln;
         let trf = &self.trf;
         let t1 = (bln - ray.a).component_div(&ray.b);
         let t2 = (trf - ray.a).component_div(&ray.b);
 
-        let tmin = t1.inf(&t2).min();
-        let tmax = t1.sup(&t2).max();
+        let tmin = t1.inf(&t2).max();
+        let tmax = t1.sup(&t2).min();
 
-        if tmax >= tmin {
-            let intersect = ray.at_t(tmin);
-
-            // Check if the intersection is inside the box
-            if intersect.x > bln.x - EPSILON
-                || intersect.x < trf.x + EPSILON
-                || intersect.y > bln.y - EPSILON
-                || intersect.y < trf.y + EPSILON
-                || intersect.z > bln.z - EPSILON
-                || intersect.z < trf.z + EPSILON
-            {
-                return true; // Intersection is outside the box
-            }
-        }
-        false
+        tmax >= tmin - EPSILON && tmax > -EPSILON
     }
     // Get the center of this bounding box
     fn get_centroid(&self) -> Point3<f64> {
@@ -126,6 +98,7 @@ impl AABB {
             self.trf.y.max(other.trf.y),
             self.trf.z.max(other.trf.z),
         );
+        self.centroid = self.bln + (self.trf - self.bln) / 2.0;
     }
     //Grow the AABB to contain the cover the point
     pub fn grow(&self, other: &Point3<f64>) -> AABB {
@@ -154,6 +127,7 @@ impl AABB {
             self.trf.y.max(other.y),
             self.trf.z.max(other.z),
         );
+        self.centroid = self.bln + (self.trf - self.bln) / 2.0;
     }
     // Size of AABB
     pub fn size(&self) -> Vector3<f64> {
@@ -304,7 +278,7 @@ impl BVH {
         // let mut best_pos = 0.0;
         // let mut best_cost = 1e30;
         // let first_prim_idx = self.bvh_nodes[index].first_prim;
-        // for axis in 0..2 {
+        // for axis in 0..3 {
         //     for i in 0..self.bvh_nodes[index].prim_count {
         //         let node = &self.nodes[first_prim_idx + i];
         //         //Get the centroid of the bounding box
@@ -391,20 +365,25 @@ impl BVH {
             return None;
         }
         if bvh_node.prim_count != 0 {
-            // Leaf node intersection
-            let node_idx = bvh_node.first_prim;
-            let node = &self.nodes[node_idx];
-            if !node.active {
-                return None;
-            }
-            if let Some(intersect) = node.intersect_ray(&ray) {
-                if intersect.distance < EPSILON {
-                    return None;
-                } else {
-                    return Some((node, intersect));
+            // Leaf node intersection — test all primitives in the leaf
+            let mut closest: Option<(&Node, Intersection)> = None;
+            let mut closest_dist = f64::MAX;
+            for i in 0..bvh_node.prim_count {
+                let node = &self.nodes[bvh_node.first_prim + i];
+                if !node.active {
+                    continue;
+                }
+                if let Some(intersect) = node.intersect_ray(&ray) {
+                    if intersect.distance < EPSILON {
+                        continue;
+                    }
+                    if intersect.distance < closest_dist {
+                        closest_dist = intersect.distance;
+                        closest = Some((node, intersect));
+                    }
                 }
             }
-            return None;
+            return closest;
         } else {
             //Recurse down the BVH
             //Recurse down the BVH right node
@@ -438,15 +417,15 @@ impl BVH {
             let aabb = self.nodes[node.first_prim + i].get_world_aabb();
             if aabb.trf[axis] < pos {
                 l_count += 1;
-                l_aabb.grow_mut(&aabb.trf);
+                l_aabb.join_mut(&aabb);
             } else {
                 r_count += 1;
-                r_aabb.grow_mut(&aabb.bln);
+                r_aabb.join_mut(&aabb);
             }
         }
         let cost = l_count as f64 * l_aabb.area() + r_count as f64 * r_aabb.area();
         match cost > 0.0 {
-            true => 0.0,
+            true => cost,
             false => 1e30,
         }
     }
