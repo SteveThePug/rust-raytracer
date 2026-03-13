@@ -47,12 +47,13 @@ impl Primitive for Sphere {
             Roots::No(_) => return None,
             Roots::One([x1]) => x1,
             Roots::Two([x1, x2]) => {
-                if x1 > EPSILON {
-                    x1
-                } else if x2 > EPSILON {
+                // roots are returned in ascending order: x1 <= x2
+                if x1 <= 0.0 && x2 <= 0.0 {
+                    return None;
+                } else if x1 <= 0.0 {
                     x2
                 } else {
-                    return None;
+                    x1
                 }
             }
             _ => return None,
@@ -122,9 +123,9 @@ impl Primitive for Circle {
         let n_dot_b = ray.b.dot(&self.normal);
         let t = (self.constant - n_dot_a) / n_dot_b;
 
-        if t < EPSILON || t > INFINITY {
+        if t <= 0.0 || t > INFINITY {
             return None;
-        };
+        }
 
         let intersect = ray.at_t(t);
         //Distance to center of circle
@@ -195,12 +196,13 @@ impl Primitive for Cylinder {
             Roots::No(_) => return None,
             Roots::One([x1]) => Some(x1),
             Roots::Two([x1, x2]) => {
-                if x1 > EPSILON {
-                    Some(x1)
-                } else if x2 > EPSILON {
+                // roots are returned in ascending order: x1 <= x2
+                if x1 <= 0.0 && x2 <= 0.0 {
+                    return None;
+                } else if x1 <= 0.0 {
                     Some(x2)
                 } else {
-                    return None;
+                    Some(x1)
                 }
             }
             _ => return None,
@@ -321,12 +323,13 @@ impl Primitive for Cone {
             Roots::No(_) => None,
             Roots::One([x1]) => Some(x1),
             Roots::Two([x1, x2]) => {
-                if x1 > EPSILON {
-                    Some(x1)
-                } else if x2 > EPSILON {
+                // roots are returned in ascending order: x1 <= x2
+                if x1 <= 0.0 && x2 <= 0.0 {
+                    None
+                } else if x1 <= 0.0 {
                     Some(x2)
                 } else {
-                    None
+                    Some(x1)
                 }
             }
             _ => None,
@@ -354,9 +357,9 @@ impl Primitive for Cone {
             (Some(cone_intersect), None) => Some(cone_intersect),
             (None, Some(circle_intersect)) => Some(circle_intersect),
             (Some(cone_intersect), Some(circle_intersect)) => {
-                let cone_distance = distance(&ray.a, &cone_intersect.point);
-                let circle_distance = distance(&ray.a, &circle_intersect.point);
-                if cone_distance < circle_distance {
+                let cone_dist = distance(&ray.a, &cone_intersect.point);
+                let circle_dist = distance(&ray.a, &circle_intersect.point);
+                if cone_dist < circle_dist {
                     Some(cone_intersect)
                 } else {
                     Some(circle_intersect)
@@ -397,7 +400,7 @@ impl Primitive for RectangleXY {
         let az = ray.a.z;
         let bz = ray.b.z;
         let t = (z - az) / bz;
-        if t < EPSILON || t > INFINITY {
+        if t <= 0.0 || t > INFINITY {
             return None;
         }
         let intersect = ray.at_t(t);
@@ -815,8 +818,8 @@ impl Primitive for Torus {
 
     fn get_aabb(&self) -> AABB {
         let extent = self.inner_rad + self.outer_rad;
-        let bln = Point3::new(-extent, -self.outer_rad, -extent);
-        let trf = Point3::new(extent, self.outer_rad, extent);
+        let bln = Point3::new(-extent, -extent, -self.outer_rad);
+        let trf = Point3::new(extent, extent, self.outer_rad);
         AABB::new(bln, trf)
     }
 }

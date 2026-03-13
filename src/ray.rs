@@ -3,7 +3,11 @@ use nalgebra::{distance, Matrix3, Matrix4, Point3, Vector3};
 use rand;
 
 fn random_vec() -> Vector3<f64> {
-    Vector3::new(rand::random(), rand::random(), rand::random())
+    Vector3::new(
+        rand::random::<f64>() * 2.0 - 1.0,
+        rand::random::<f64>() * 2.0 - 1.0,
+        rand::random::<f64>() * 2.0 - 1.0,
+    )
 }
 fn random_unit_vec() -> Vector3<f64> {
     random_vec().normalize()
@@ -165,7 +169,6 @@ impl Ray {
         let incidence = &ray.b;
         let material = &node.material;
 
-        // Compute the ambient light component and set it as base colour
         let mut colour = Vector3::zeros();
 
         // Reflection is view-dependent, not light-dependent — compute once
@@ -257,7 +260,6 @@ impl Ray {
                 if let Some((_, intersect)) = bvh.traverse(self, 0) {
                     return intersect.distance < light_distance;
                 }
-                return false;
             }
             None => {
                 for (_, node) in &scene.nodes {

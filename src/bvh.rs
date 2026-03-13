@@ -36,36 +36,46 @@ impl AABB {
     }
     //Apply a matrix transformation to a box
     pub fn transform_mut(&mut self, mat: &Matrix4<f64>) {
-        let bln = &mut self.bln;
-        let trf = &mut self.trf;
-        let centroid = &mut self.centroid;
-        self.bln = mat.transform_point(bln);
-        self.trf = mat.transform_point(trf);
-        self.centroid = mat.transform_point(centroid);
+        let corners = [
+            Point3::new(self.bln.x, self.bln.y, self.bln.z),
+            Point3::new(self.trf.x, self.bln.y, self.bln.z),
+            Point3::new(self.bln.x, self.trf.y, self.bln.z),
+            Point3::new(self.trf.x, self.trf.y, self.bln.z),
+            Point3::new(self.bln.x, self.bln.y, self.trf.z),
+            Point3::new(self.trf.x, self.bln.y, self.trf.z),
+            Point3::new(self.bln.x, self.trf.y, self.trf.z),
+            Point3::new(self.trf.x, self.trf.y, self.trf.z),
+        ];
+        let mut new_bln = Point3::new(f64::MAX, f64::MAX, f64::MAX);
+        let mut new_trf = Point3::new(f64::MIN, f64::MIN, f64::MIN);
+        for corner in &corners {
+            let t = mat.transform_point(corner);
+            new_bln = new_bln.inf(&t);
+            new_trf = new_trf.sup(&t);
+        }
+        self.bln = new_bln;
+        self.trf = new_trf;
+        self.centroid = self.bln + (self.trf - self.bln) / 2.0;
     }
     // Intersect bounding box exactly
     pub fn intersect_ray(&self, ray: &Ray) -> bool {
-        let bln = &self.bln;
-        let trf = &self.trf;
-        let t1 = (bln - ray.a).component_div(&ray.b);
-        let t2 = (trf - ray.a).component_div(&ray.b);
+        let t1 = (self.bln - ray.a).component_div(&ray.b);
+        let t2 = (self.trf - ray.a).component_div(&ray.b);
 
         let tmin = t1.inf(&t2).max();
         let tmax = t1.sup(&t2).min();
 
         tmax >= tmin && tmax > 0.0
     }
-    // Intersect ray with some epsilon tolerance
+    // Intersect with some epsilon tolerance
     pub fn intersect_ray_aprox(&self, ray: &Ray) -> bool {
-        let bln = &self.bln;
-        let trf = &self.trf;
-        let t1 = (bln - ray.a).component_div(&ray.b);
-        let t2 = (trf - ray.a).component_div(&ray.b);
+        let t1 = (self.bln - ray.a).component_div(&ray.b);
+        let t2 = (self.trf - ray.a).component_div(&ray.b);
 
         let tmin = t1.inf(&t2).max();
         let tmax = t1.sup(&t2).min();
 
-        tmax >= tmin - EPSILON && tmax > -EPSILON
+        tmax >= tmin - EPSILON && tmax > 0.0
     }
     // Get the center of this bounding box
     fn get_centroid(&self) -> Point3<f64> {
@@ -365,7 +375,7 @@ impl BVH {
             return None;
         }
         if bvh_node.prim_count != 0 {
-            // Leaf node intersection — test all primitives in the leaf
+            // Leaf node - check all primitives it contains
             let mut closest: Option<(&Node, Intersection)> = None;
             let mut closest_dist = f64::MAX;
             for i in 0..bvh_node.prim_count {
@@ -374,10 +384,7 @@ impl BVH {
                     continue;
                 }
                 if let Some(intersect) = node.intersect_ray(&ray) {
-                    if intersect.distance < EPSILON {
-                        continue;
-                    }
-                    if intersect.distance < closest_dist {
+                    if intersect.distance >= EPSILON && intersect.distance < closest_dist {
                         closest_dist = intersect.distance;
                         closest = Some((node, intersect));
                     }
@@ -424,10 +431,7 @@ impl BVH {
             }
         }
         let cost = l_count as f64 * l_aabb.area() + r_count as f64 * r_aabb.area();
-        match cost > 0.0 {
-            true => cost,
-            false => 1e30,
-        }
+        if cost > 0.0 { cost } else { 1e30 }
     }
 }
 
